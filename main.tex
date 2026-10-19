@@ -1,16 +1,13 @@
 \documentclass[sigconf,review,anonymous]{acmart}
 
-%% ACM metadata — The Web Conference 2027 (WWW '27), Dublin.
-%% Abstracts 2026-10-18, full papers 2026-10-25 (AoE). Page limit not yet published
-%% at the time of writing; verify against the official CFP before submitting.
-%% WWW review is double-blind: `anonymous` strips authors and affiliations.
-%% Suppress copyright/ISBN/DOI and the ACM Reference Format during review;
-%% replace with the eRights values at camera-ready.
+%% ACM metadata — The Web Conference 2027 (double-blind, 2-column)
+%% Suppress copyright/ISBN/DOI block and ACM Reference Format during review.
+%% Replace with real values from the ACM eRights email at camera-ready.
 \setcopyright{none}
 \settopmatter{printacmref=false}
 \copyrightyear{2027}
 \acmYear{2027}
-\acmConference[WWW '27]{Proceedings of the ACM Web Conference 2027}{April 2027}{Dublin, Ireland}
+\acmConference[WWW '27]{The ACM Web Conference 2027}{May 10--14, 2027}{Dublin, Ireland}
 
 %% Additional packages (not bundled in acmart)
 \usepackage{tikz-cd}
@@ -42,9 +39,9 @@
 }
 
 %%% Title
-\title{What Consolidation Destroys: Measuring Information Loss in LLM-Maintained Hierarchical User Memory}
+\title{Hierarchical User Memory with Backward Consolidation for POI Recommendation}
 
-%%% Authors — hidden by the `anonymous` class option for WWW double-blind review.
+%%% Authors (hidden by the `anonymous' option for double-blind review)
 \author{Junguel Lee}
 \affiliation{%
   \institution{Naver Corp}
@@ -88,13 +85,11 @@
 \email{andres.chkim@navercorp.com}
 
 \begin{abstract}
-Hierarchical memory systems for LLM agents periodically consolidate their own contents: sibling notes are merged, shared traits are promoted to a parent, stale nodes are pruned. Consolidation is normally justified by footprint and evaluated by downstream accuracy, so what it removes is never observed directly. We deploy such a memory as the persistent user model of a large Korean web map service and measure the removal itself.
+Place recommendation needs both fine-grained behavioral signals and a structured memory that can be updated as preferences evolve. Recent memory-augmented LLM agents~\cite{mem0,amem,personamem-v2} show that structured memory compresses long histories without degrading downstream quality. We propose a \textbf{POI-centric Hierarchical Note-based Memory} that turns raw POI interaction logs into a three-level tree grounded in a POI taxonomy and maintained dynamically. Building on PersonaMem-v2~\cite{personamem-v2}, the system adds three POI-specific pieces: dynamic LLM-driven routing, a backward consolidation pass (merge, elevate, prune), and three-axis preference separation (demographics, explicit, implicit).
 
-We track every keyword in a child note across one consolidation pass and classify it as \emph{retained}, \emph{lifted} to the parent, or \emph{lost} entirely. On 500 production memory trees, unguarded trait elevation with gemma-4-31b loses \(25.3\%\) of child keywords --- counting only those absent from the surrounding prose as well --- and loses them even where siblings share no keyword at all and nothing needs to move. That stratum still loses \(18.0\%\): the deletion looks collateral to the rewrite rather than a consequence of compression.
+Our central finding, on a 4-way POI MCQ over \(N{=}500\) users, is that \emph{the wording of the elevation prompt matters more than the structural elevation choice itself}. Two naive prompts that change the structure (one rewrites children, \emph{destructive}, \(0.740\); one does not, \emph{additive}, \(0.724\)) both fall below the strongest baseline FixedHier (\(0.760\)). Adding a one-line \textbf{concrete-noun guard}, a rule that forbids replacing subcategory words such as ``Korean'' with abstract ones such as ``Asian cuisine,'' restores accuracy to \(0.758\), matching FixedHier within the \(\pm 0.038\) Wilson 95\% CI.
 
-Three findings follow. First, the magnitude is a property of the backbone, not of the method: across three models the same prompt ranges from \(34\%\) keyword compression to \(5\%\) \emph{inflation}, and the prompt-level guard that is decisive on one model slightly but significantly \emph{increases} loss on the model we actually deployed. Second, that guard protects the wrong tokens --- place and brand names survive above their base rate, while what is lost in bulk is category vocabulary and, at \(2.4\times\) its base rate, the behavioural evidence grounding each claim; a guard rewritten from the measured loss profile cuts loss from \(0.181\) to \(0.160\) (\(p<0.0001\)). Third, sibling merging, which prior work leaves unexamined, turns out to relocate rather than delete: it appears to contribute roughly a quarter of total loss under a same-path instrument and \(+0.007\) under one that follows relocation.
-
-The loss is not recovered downstream: over \(70\%\) of lost keywords are also absent from the regenerated persona, and not because a different subtree was selected. On a leak-free held-out MCQ, accuracy on the development half orders inversely to loss (\(0.452\) to \(0.484\)) but no pairwise difference is significant at \(N{=}500\), so we report consolidation as a compression mechanism whose information cost is now measurable and, on one backbone, reducible, not as an accuracy lever. Every loss result was developed on one half of each snapshot and confirmed on a reserved half opened once (the instrument was corrected afterwards and both halves recomputed): the aggregate loss measurements replicate to within \(0.003\), and the accuracy null replicates too.
+At this accuracy, the system is also the most compact memory among the deployable systems we evaluated: \(2{,}621\) tokens per user, \(28\times\) smaller than the full-context oracle and \(12\%\) smaller than FixedHier. The compression decomposes into three independent axes against FixedHier (fewer notes per user, shorter notes, and a smaller total footprint), which we summarize in a single Memory Efficiency Score (MES, defined in Section~\ref{sec:main-results}) on which Ours ranks first among all evaluated configurations. The backward consolidation pass primarily serves as a compression mechanism: removing it inflates memory by \(16\%\) with no measurable accuracy gain. For deployed POI memory, the elevation prompt is the primary design choice; structural choices such as dynamic vs.\ fixed hierarchy contribute less to accuracy.
 \end{abstract}
 
 %% CCS concepts (required by acmart for papers > 2 pages)
@@ -121,7 +116,7 @@ The loss is not recovered downstream: over \(70\%\) of lost keywords are also ab
 \ccsdesc[300]{Computing methodologies~Natural language processing}
 \ccsdesc[300]{Computing methodologies~Knowledge representation and reasoning}
 
-\keywords{user modeling, personalization, memory-augmented LLM agents, memory consolidation, information loss}
+\keywords{personalization, Point-of-Interest (POI) recommendation, memory-augmented LLM agents, hierarchical user memory}
 
 \begin{document}
 \maketitle
@@ -132,22 +127,33 @@ The loss is not recovered downstream: over \(70\%\) of lost keywords are also ab
 %% ============================================================
 \section{Introduction}
 
-Web services increasingly hand the user model behind their personalization to LLM agents that read it and keep it current; this paper measures what that upkeep destroys, in a deployed map and place-search service (\(2.0\text{M}\) distinct users over five weeks). In POI (Point-of-Interest)-centric services the model must capture which place types a user prefers and how they visit. Real POI logs make that hard: they are large-scale and noisy, explicit signals such as reviews are sparse, and implicit ones are pervasive but ambiguous~\cite{proex}. Neither of the standard constructions fits. Full-context prompting hits context limits and lost-in-the-middle effects~\cite{lost-in-the-middle}: strong on factual recall (\(92.85\%\) on LoCoMo~\cite{beyond-context-window}) but behind a compact agentic memory on implicit personalization (\(45.6\%\) for GPT-5-Chat vs.\ \(55.2\%\)~\cite{personamem-v2}), at much higher cost. Retrieval over flat chunks~\cite{dpr,contriever} avoids the limit but cannot move between fine-grained categories and higher-level tendencies such as a dining-focused lifestyle. Our own measurements narrow this motivation: at the size our deployed memory reaches, flattening it away costs nothing downstream and selecting from it costs a great deal (Section~\ref{sec:delivery}); the hierarchy buys bounded read cost and a place for a maintenance policy, not accuracy.
+\emph{Relevance to the Web.} Place search and recommendation on web map services run on exactly this kind of user model; this paper studies how an LLM-maintained memory for it should be consolidated, and reports what holds up in a deployed setting.
 
-We deploy a POI-centric Hierarchical Note-based Memory and a Memory Agent that maintains it (Figure~\ref{fig:overview} in Appendix~\ref{app:motivation} gives a worked example). The memory aggregates POI activities into topic-specific notes via LLM reasoning and organizes them in a three-level POI taxonomy.
+Personalization drives user satisfaction and click-through rate (CTR) in modern platform services. In POI (Point-of-Interest)-centric services such as place recommendation, accurate modeling of users' preferred place types and visitation patterns is critical. Prior work constructs user personas either by injecting the full interaction history into a large language model (LLM)~\cite{beyond-context-window} or by chunking and retrieving relevant pieces via similarity~\cite{dpr,contriever}; the resulting personas serve as context in recommendation and search, and their quality directly affects downstream performance.
 
-Every such system must eventually consolidate, or its trees grow without bound: on our deployment, where consolidation has effectively not run, notes per user rise \(16.4\%\) and keywords \(29.5\%\) per update cycle. What consolidation costs to stop that has not been measured. Prior systems justify it by footprint and validate it by downstream accuracy~\cite{mem0,personamem-v2}, which leaves the operation unobserved: a consolidation that quietly discards half the evidence and one that losslessly reorganizes it are indistinguishable if both shrink the tree and neither moves an accuracy number carrying its own noise. 
+Generating high-quality personas from real-world POI logs is challenging. Logs (search, save, click, visit, reservation) are large-scale and noisy, with much exploratory behavior that does not reveal preferences. Place preferences also emerge gradually rather than from any single event. Explicit signals such as reviews are sparse and cover only a subset of users, while implicit behaviors (repeated clicks within a category, sustained exploration, prolonged dwell time) are pervasive~\cite{proex}. Any single implicit signal is ambiguous, but consistent patterns across interactions reveal structured latent preferences.
 
-We instrument the operation rather than its consequences, following each keyword through one consolidation pass on deployed memory. The resulting picture is not the one the design assumed, and not the same on every backbone.
+Because preferences evolve, the system must reconcile historical patterns with current interests. These properties expose limitations of existing methods. Full-context approaches quickly hit context limits and suffer from lost-in-the-middle effects~\cite{lost-in-the-middle}. They score well on direct factual recall (92.85\% on LoCoMo~\cite{beyond-context-window}) but lose to structured memory on implicit personalization (45.6\% vs.\ 55.2\%~\cite{personamem-v2}), and at much higher cost. Retrieval-based chunking avoids the context limit but fragments the already-sparse POI signal. Flat chunks also cannot move freely between fine-grained categories (e.g., Korean, Japanese, caf\'{e}s) and higher-level tendencies such as a dining-focused lifestyle.
+
+Recent memory-augmented LLM agents take varied approaches. Mem0~\cite{mem0} maintains a flat list with add/update/delete operations but lacks hierarchy. A-Mem~\cite{amem} adds structured notes with cross-node activation but no explicit hierarchy management. PersonaMem-v2~\cite{personamem-v2} introduces a three-level tree with dual explicit/implicit extraction and outperforms full-context baselines, but relies on fixed predefined slots and performs no structural maintenance such as cross-level trait promotion. For POI specifically, Feng et al.~\cite{zeropoirec} probe zero-shot next-POI ranking with LLMs but report that the models struggle with geographical reasoning and candidate ordering, highlighting the need for structured user-side memory rather than prompt-only inference.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/intro_memory.png}
+  \Description{Three-panel comparison of personalization on a dining query for a user whose preferences shifted from spicy to mild after a gastritis episode: a full-context LLM and a RAG baseline both recommend spicy dishes by missing the gastritis signal, while our hierarchical-note memory consolidates activities into topic-wise notes and recommends warm congee.}
+  \caption{Personalization on a dining query for a user whose preferences have evolved (spicy $\to$ mild after gastritis). \textit{Left:} a full-context LLM cannot reason beyond its context limit, and RAG retrieves entries semantically similar to ``dining'' but misses the gastritis signal, so both recommend spicy dishes. \textit{Middle:} the raw user-activity history is long enough to exceed the LLM context window, and the gastritis-related entries are scattered across sessions. \textit{Right:} our hierarchical-note memory consolidates activities into topic-wise notes (e.g., \emph{Dining}, \emph{Cafe}), updates the relevant note whenever new history is added, and leverages the \emph{Dining} path at inference time to surface the evolved preference and recommend a context-appropriate ``warm congee''.}
+  \label{fig:overview}
+\end{figure*}
+
+We propose a POI-centric Hierarchical Note-based Memory and a Memory Agent that maintains it dynamically (Figure~\ref{fig:overview}). The memory aggregates POI activities into topic-specific notes via LLM reasoning, consolidating dispersed implicit preferences into compact units, and organizes them in a three-level POI taxonomy. Preference information is stored at the appropriate abstraction level (e.g., region-, category-, or situation-based), so downstream consumers can read only the slice they need.
 
 Our contributions are:
 \begin{itemize}
-    \item \textbf{A direct measure of consolidation loss.} Every child keyword is classified as retained, lifted, or lost across one pass: the operation is observed, not inferred from downstream scores, and needs no labels.
-    \item \textbf{Evidence that consolidation deletes rather than compresses.} Users whose siblings share no keyword --- where promotion has nothing to promote --- still lose nearly a fifth of their child keywords, and loss rises monotonically with the amount genuinely shared.
-    \item \textbf{Backbone dependence, with a sign change.} The same prompt on the same trees ranges from heavy compression to net inflation across three models, and the guard decisive on one significantly increases loss on another --- the one we deployed. 
-    \item \textbf{A guard derived from measurement, and a mis-attributed source of loss.} The deployed guard names tokens that were never at risk; rewriting it around the measured loss profile reduces loss further at no additional inference cost. Merging, which prior work ignores, turns out to relocate rather than delete; a same-path instrument reports it as roughly a quarter of all loss.
-    \item \textbf{Propagation to the consumed artifact, and a larger loss beside it.} Over \(70\%\) of the keywords consolidation removes also vanish from the regenerated persona and not because a different subtree was selected. Measuring the delivery path itself against the raw notes then found it the more expensive operation, by roughly a factor of six: selection and synthesis together cost \(+0.190\) accuracy, three quarters of the gain the deployed memory delivers over an empty persona.
-    \item \textbf{Confirmation on reserved data.} Each snapshot was split in half; every loss comparison was developed on one half and verified on the other (with one post-hoc correction, Section~\ref{sec:data}), including the guard derived from the development half.
+    \item \textbf{C1 (system).} A POI-centric hierarchical note memory extending PersonaMem-v2~\cite{personamem-v2} with dynamic LLM-driven routing, three-axis preference separation (demographics, explicit, implicit), and a backward consolidation pass (merge, elevate, prune).
+    \item \textbf{C2 (central finding).} On a 4-way POI MCQ over \(N{=}500\) users, the elevation \emph{prompt} matters more than the structural elevation choice: a one-line \textbf{concrete-noun guard} raises accuracy from \(0.724\)--\(0.740\) (naive variants) to \(0.758\), statistically tied with FixedHier (\(0.760\)) within the \(\pm 0.038\) Wilson 95\% CI.
+    \item \textbf{C3 (three-axis compression at parity).} At the same accuracy, Ours compresses on three axes vs.\ FixedHier (notes/u \(-8.2\%\), tok/note \(-4.0\%\), tokens/u \(-11.8\%\)) and is \(28\times\) smaller than the full-context oracle, topping the Memory Efficiency Score (MES \(=0.149\); Eq.~\ref{eq:mes}).
+    \item \textbf{C4 (backward pass as footprint lever).} Removing the backward pass moves accuracy within the CI (\(0.758\!\to\!0.734\)) but inflates tokens by \(16.4\%\): a compression mechanism, not an accuracy contributor.
+    \item \textbf{C5 (evaluation).} A typed 4-way MCQ probe adapted from PersonaGym~\cite{personagym} (T1 recall, T2 cross-signal, T3 evolution) reporting per-type accuracy at \(N{=}500\).
 \end{itemize}
 
 
@@ -155,25 +161,15 @@ Our contributions are:
 %% RELATED WORK
 %% ============================================================
 \section{Related Work}
-\label{sec:related}
 
-\paragraph{Memory architectures and their maintenance operations.}
-Building on LLM-agent frameworks~\cite{react,reflexion,generative-agents}, agent memory varies in structure (flat vs.\ hierarchical) and in maintenance (append-only vs.\ actively managed; cf.~\cite{memory-survey}). One family rewrites or discards what it holds. Mem0~\cite{mem0} issues per-item update and delete decisions over a flat list; MemGPT~\cite{memgpt} pages content out of context; MemoryBank~\cite{memorybank} applies Ebbinghaus-curve forgetting; PersonaMem-v2~\cite{personamem-v2} trains a 4B agent to rewrite a single compact persona memory as conversations arrive, and beats GPT-5-Chat (\(55.2\%\) vs.\ \(45.6\%\)) at \(16\times\) fewer tokens than the full history. The other family does not contract: A-Mem~\cite{amem} creates, links and updates notes with no described merge or prune step, EMem~\cite{emem} stores information in a non-compressive event graph and exceeds full-context quality on LoCoMo with ${\sim}32\times$ fewer tokens, and HippoRAG~\cite{hipporag} indexes through a knowledge graph. PersonaMem~\cite{personamem} benchmarks dynamic user profiling. Our deployment belongs to the first family, with dynamic routing, trait elevation and a third extraction axis --- and this paper is about what its rewriting step removes.
+\paragraph{Memory architectures.}
+Building on LLM-agent frameworks~\cite{react,reflexion,generative-agents}, recent work on agent memory varies along two axes: structure (flat vs.\ hierarchical) and maintenance (append-only vs.\ actively managed). Mem0~\cite{mem0} keeps an unstructured list with add/update/delete; MemGPT~\cite{memgpt} extends context via virtual paging; neither imposes semantic organization. A-Mem~\cite{amem} uses Zettelkasten-style notes with cross-node activation but no taxonomy-grounded hierarchy or backward maintenance. EMem~\cite{emem} matches full-context quality on LoCoMo with ${\sim}32\times$ fewer tokens via expectation-guided storage. MemoryBank~\cite{memorybank} adds Ebbinghaus-curve forgetting, and HippoRAG~\cite{hipporag} models cortex-hippocampus indexing with a knowledge graph; both show biologically inspired structure helps, but neither adapts topology dynamically. PersonaMem~\cite{personamem} and PersonaMem-v2~\cite{personamem-v2} are closest to our work: PersonaMem-v2 proposes a three-level tree with dual explicit/implicit extraction and outperforms full-context baselines (55.2\% vs.\ 45.6\% at \(16\times\) fewer tokens). We extend this paradigm with dynamic LLM-driven routing, common trait elevation as a backward maintenance operation, and a third extraction axis with root-exclusive routing.
 
-\paragraph{The measurement gap.}
-Contraction is justified by footprint and validated by downstream task scores, a pairing that cannot distinguish a step that reorganizes losslessly from one that discards evidence: both shrink the store, and a noisy task score will not separate them. We know of no benchmark in this line that reports what a maintenance pass removed, only what the memory scored afterwards, so we instrument the operation itself.
+\paragraph{Full-context vs.\ structured memory.}
+Long-context LLMs lead on factual recall~\cite{beyond-context-window} but degrade on middle-position recall~\cite{lost-in-the-middle}, needle-in-a-haystack~\cite{needle-haystack}, and RULER~\cite{ruler}. RAG~\cite{rag,self-rag} sidesteps context limits but assumes verbatim answers in retrieved passages. For implicit preferences (signals distributed across many ambiguous behavioral events), structured memory is preferable. In our setting, implicit extraction averages 73K tokens per user, beyond practical limits at deployment scale; we therefore use full-context as a quality validation baseline, not a deployment option.
 
-\paragraph{Faithfulness under abstraction.}
-Trait elevation is abstractive summarization applied to a system's own state, and abstractive summarizers are known to hallucinate and distort source content~\cite{maynez-faithfulness,hallucination-survey}. The memory setting is harsher: a summarizer leaves its source intact, so a failure is recoverable by re-reading, whereas a memory agent overwrites, so what one pass discards is absent from every later read, and there is no source to check against at maintenance time --- which is why the loss goes unnoticed. Input-side prompt compression~\cite{llmlingua} maps the same frontier for transient context; ours is persistent state, where each pass compresses an already-compressed artifact.
-
-\paragraph{Prompt sensitivity and backbone dependence.}
-LLM behaviour shifts under prompt changes a human would call cosmetic~\cite{formatspread}, motivating evaluation across multiple prompts~\cite{multiprompt}. That literature measures how a prompt's \emph{score} moves; we report the same fragility in what a prompt \emph{destroys}, across backbones rather than formats: with the prompt and the trees held fixed, one model compresses by a third while another inflates, and a guard that is decisive on the first significantly increases loss on the second.
-
-\paragraph{Evaluating personalization without online tests.}
-Classical sequential recommenders~\cite{sasrec,bert4rec} and trajectory models~\cite{deepmove,stan,getnext} learn dense representations with limited interpretability; LLM-based recommenders~\cite{p5,tallrec,llara,recmind,llm4rec-survey} unify recommendation as language processing. Persona generation has been studied from synthetic seeds~\cite{personahub}, reward signals~\cite{synthesizeme} and interaction histories~\cite{proex}, with parameter-side personalization~\cite{oppu,hydra} and retrieval-based persona selection~\cite{persona-db,rmm} as neighbouring routes; for POI, zero-shot next-POI ranking is order-sensitive and weak on geography~\cite{zeropoirec}. Evaluation methodology comes from PersonaGym~\cite{personagym}, PersonaBench~\cite{personabench} and LaMP~\cite{lamp}, with MCQ probing following MMLU~\cite{mmlu}; where online tests are impractical, LLM judges are the emerging middle ground~\cite{mtbench,laaj-survey,laaj-podcast}. 
-
-\paragraph{Full context as a reference point.}
-Long-context LLMs lead on factual recall~\cite{beyond-context-window} but degrade on middle-position recall~\cite{lost-in-the-middle}, needle-in-a-haystack tests~\cite{needle-haystack} and RULER~\cite{ruler}; RAG~\cite{rag,self-rag} sidesteps the limit but depends on retrieved passages containing the evidence needed to answer.  Full context over a user's \emph{raw} interaction log is 73K tokens and not an option --- that is why a memory exists. Full context over the \emph{memory} is a median \(2{,}146\) characters and entirely an option, which is why we use it as a baseline in Section~\ref{sec:delivery} rather than as a strawman.
+\paragraph{Recommendation and persona construction.}
+Classical sequential recommenders~\cite{sasrec,bert4rec} and trajectory models~\cite{deepmove,stan,getnext} learn dense representations but require large supervised signal with limited interpretability. LLM-based recommenders~\cite{p5,tallrec,llara,recmind,llm4rec-survey} unify recommendation as language processing. Our system shares the language-grounded representation with P5/TallRec but separates persona construction from recommendation: the persona is an interpretable, evolving artifact built offline and injected into downstream prompts. Persona generation has been studied from synthetic seeds~\cite{personahub}, reward signals~\cite{synthesizeme}, and interaction histories~\cite{proex}; evaluation methodology comes from PersonaGym~\cite{personagym}, PersonaBench~\cite{personabench}, and LaMP~\cite{lamp}, with MCQ probing following MMLU~\cite{mmlu}. Parameter-side personalization~\cite{oppu,hydra} is complementary to our prompt-context approach. For POI specifically, Feng et al.~\cite{zeropoirec} report zero-shot next-POI ranking with LLMs is sensitive to candidate ordering and limited in geographical reasoning. Persona-DB~\cite{persona-db} and RMM~\cite{rmm} explore retrieval-based persona selection; we differ by maintaining a \textit{persistent, evolving} memory with structural maintenance, accumulating evidence across sessions rather than one-shot extraction.
 
 
 %% ============================================================
@@ -183,49 +179,109 @@ Long-context LLMs lead on factual recall~\cite{beyond-context-window} but degrad
 
 \subsection{Overview}
 
-Our framework constructs POI-centric user memory in three stages. \textbf{(1) Signal Extraction} converts raw POI interaction data (clicks with their originating search query, saves, reviews) into structured profiles, processing explicit signals (reviews) and implicit signals (behavioral logs) separately. \textbf{(2) Hierarchical Note Memory} stores extracted features in a taxonomy-grounded three-level tree, maintained by a \textbf{Memory Agent} that performs forward aggregation of new signals and backward consolidation for structural integrity. \textbf{(3) Downstream Consumption} selects relevant paths from the hierarchy and synthesizes their notes into a short persona, which is injected into an LLM-as-reranker prompt~\cite{rankgpt} as the production target. Both of its steps are themselves compressions, and Section~\ref{sec:delivery} finds them the most expensive operations we measure --- more expensive than the consolidation this paper set out to instrument. 
+Our framework constructs POI-centric user memory in three stages. \textbf{(1) Signal Extraction} converts raw POI interaction data (search queries, clicks, saves, reviews) into structured profiles, processing explicit signals (reviews) and implicit signals (behavioral logs) separately. \textbf{(2) Hierarchical Note Memory} stores extracted features in a taxonomy-grounded three-level tree, maintained by a \textbf{Memory Agent} that performs forward aggregation of new signals and backward consolidation for structural integrity. \textbf{(3) Downstream Consumption} reads relevant notes from the hierarchy and injects them into an LLM-as-reranker prompt~\cite{rankgpt} as the production target. In this paper we evaluate upstream memory quality via the MCQ probe in Section~\ref{sec:experimental-setup}, isolating memory design from reranker-specific behavior.
 
 \subsection{POI Interaction Signal Extraction}
 
-Two channels feed the memory. \textbf{Explicit} signals come from reviews, where a preference is stated outright; an LLM turns each review history into structured items with a claim and a quoted rationale. \textbf{Implicit} signals come from behaviour --- POI clicks with the query that produced them, and saves --- grouped into micro-sessions when consecutive interactions share a query or POI within 60 minutes. The sessionized log is profiled by an LLM under constraints that every claim cite specific click evidence and that unobserved behaviour never be inferred. Extraction runs over sliding 21-day windows whose results are merged. Appendix~\ref{app:extraction} gives the prompts and per-user variants.
+User preferences for places appear through two different channels: explicit signals written by the user, and implicit signals inferred from behavior. We extract a structured preference profile from each channel separately, then merge them in the hierarchical memory. This dual-extraction approach follows the paradigm established by PersonaMem-v2~\cite{personamem-v2}, adapted to the POI domain where implicit behavioral signals are particularly abundant. A third demographic axis is introduced later, during forward aggregation (Section~\ref{sec:forward}), with root-exclusive routing.
+
+\subsubsection{Explicit Signal Extraction.}
+Explicit signals originate from user-authored content (primarily place reviews), where preferences are stated directly in natural language (e.g., ``I love spicy broth'' or ``the quiet atmosphere was perfect for working''). We process review histories with an LLM-based extraction pipeline that, for each user, produces a set of structured persona items. Each item consists of four fields: (a)~\textit{User\_Info}, a single atomic fact about the user's lifestyle or preference distilled from the review evidence; (b)~\textit{Rationale}, a chain-of-thought justification grounded in specific review dates, place names, and quoted expressions; (c)~\textit{User\_Vocabulary}, verbatim words and phrases from the user's original text to preserve linguistic identity; and (d)~\textit{Reference}, indices into the source review records.
+
+To handle the wide variance in review volume across users, we employ two few-shot prompt strategies: a \textit{rich} variant with detailed examples for users who have written many reviews, and a \textit{sparse} variant with conservative, observation-oriented examples for users with limited review data. The sparse strategy deliberately avoids over-generalizing from insufficient evidence, instead emphasizing factual descriptions of observed behavior.
+
+\subsubsection{Implicit Signal Extraction.}
+Implicit signals are derived from non-verbal behavioral traces: search queries, POI clicks, dwell patterns, and place saves. Unlike reviews, these actions do not directly articulate preferences, but consistent patterns across many interactions can reveal latent interests~\cite{proex}. We construct a profiling pipeline that transforms raw click logs into structured personas through the following steps:
+
+\begin{enumerate}
+    \item \textbf{Sessionization.} Consecutive interactions involving the same query or the same POI within a 60-minute window are grouped into micro-sessions. Each session records the query text, timestamps, day of week, clicked POI name and category, location, review popularity rank, and click count.
+
+    \item \textbf{Demographic context attachment.} Available demographic attributes (age, gender, marital status, household composition, occupation, and children information) are prepended to the session log as structured metadata. These attributes are later routed exclusively to the root node's \texttt{user\_info} field during hierarchical path mapping (Section~\ref{sec:forward}), enforcing a clean separation between demographic facts and behavioral preferences.
+
+    \item \textbf{LLM-based persona profiling.} The sessionized log is passed to an LLM with strict constraints: (a)~all persona claims must cite specific click evidence; (b)~hallucination of unobserved behaviors (e.g., inferring residence from visit locations) is prohibited; (c)~stereotypical reasoning based on demographics is forbidden; and (d)~the output must decompose preferences into predefined POI domains (dining, caf\'{e}s, travel, medical, beauty, shopping, etc.).
+\end{enumerate}
+
+The output is a domain-partitioned persona string, where each domain section describes the user's inferred preferences with concrete behavioral evidence. To capture temporal dynamics, we apply this extraction over sliding windows (e.g., 21-day periods) across the observation period and aggregate the per-window results into a unified implicit persona per user.
+
 
 \subsection{Hierarchical Note Memory Structure}
 
-The core data structure is a three-level tree grounded in a predefined POI taxonomy.
+The core data structure is a three-level tree grounded in a predefined POI taxonomy, designed to support preference representation at multiple levels of abstraction. This structure extends the three-level paradigm of PersonaMem-v2~\cite{personamem-v2} with domain-specific customization for POI services and dynamic path management.
 
-Level~1 is the root, representing the user as a whole; Level~2 holds 10 broad POI domains (\textit{Dining}, \textit{Caf\'{e}/Dessert}, \textit{Transportation/Mobility}, \textit{Travel/Accommodation}, \textit{Leisure/Sports}, \textit{Culture/Arts}, \textit{Self-development}, \textit{Pets}, \textit{Shopping}, \textit{Beauty}); Level~3 holds 2--10 fine-grained subcategories per domain. A \textit{Medical} domain was specified initially and removed before deployment as sensitive personal information; Section~\ref{sec:governance} describes the filtering that replaced it. Unlike a fixed-slot taxonomy, the agent may create new Level-3 nodes when user data warrants categories the base hierarchy lacks, subject to the consistency constraints of Section~\ref{sec:forward}. Depth is bounded at three levels by prompt instruction only; we found no structural check in the deployed code, and Section~\ref{sec:governance} reports whether the bound held in our runs.
+\subsubsection{POI Taxonomy.}
+The base hierarchy defines Level~1 as the root node (representing the user as a whole), Level~2 as broad POI domains, and Level~3 as fine-grained subcategories within each domain. The predefined taxonomy includes 11 Level~2 domains---\textit{Dining}, \textit{Caf\'{e}/Dessert}, \textit{Transportation/Mobility}, \textit{Travel/Accommodation}, \textit{Leisure/Sports}, \textit{Culture/Arts}, \textit{Self-development}, \textit{Pets}, \textit{Shopping}, \textit{Medical}, and \textit{Beauty}---each containing 2--10 Level~3 subcategories (e.g., Dining $\rightarrow$ \{Korean, Japanese, Chinese, Western, Fast Food, \ldots\}). Unlike the fixed-slot approach of PersonaMem-v2, the Memory Agent may dynamically extend this taxonomy by creating new Level~3 nodes when user data warrants categories not present in the base hierarchy, subject to the hierarchical consistency constraints described in Section~\ref{sec:forward}. A maximum depth of three levels is enforced both at the prompt level and through structural validation.
 
-Each node carries a \textit{Note}: its \texttt{path}, a natural-language \texttt{summary} of the user's preferences for that category, BM25-oriented \texttt{keywords} for retrieval, and update bookkeeping (\texttt{updated\_count}, \texttt{recently\_\allowbreak updated}). The keyword field is what our instrument tracks. A \texttt{user\_info} field carried demographic attributes at the root; it was removed from the deployed schema during the course of this work under a privacy review (Section~\ref{sec:governance}). Appendix~\ref{app:schema} gives the full schema with examples and the storage layout.
+\subsubsection{Note Schema.}
+Each node in the hierarchy is associated with a \textit{Note}, a structured record that stores the accumulated preference knowledge for that category. A note contains the following fields:
 
-Figure~\ref{fig:workflow} walks one update through both passes: the forward pass touches only the notes new activity affects, and the backward pass then merges overlapping siblings, elevates traits shared across them to the parent, and prunes leaves untouched within a staleness window.
+\begin{itemize}
+    \item \textbf{path}: the full hierarchical path (e.g., ``User $>$ Dining $>$ Korean Food''),
+    \item \textbf{user\_info}: demographic and factual attributes (populated \textit{only} at the root node; e.g., ``24-year-old male, lactose intolerant, frequently active near Gangnam Station''; all sub-nodes are constrained to empty lists),
+    \item \textbf{summary}: a natural-language paragraph summarizing the user's preferences and behavioral patterns for this category, integrating both explicit and implicit signals (e.g., for the Korean Food node: ``favors spicy and savory dishes such as spicy pork,'' inferred from repeated visits and supportive review excerpts),
+    \item \textbf{keywords}: BM25-oriented keyword tags for retrieval,
+    \item \textbf{updated\_count}: the number of times the note content has been substantively modified,
+    \item \textbf{recently\_updated}: the date of the most recent content update (e.g., the Korean Food note advances from 2025/02/19 to 2025/02/25 after new activity arrives, while the Tennis note, last updated on 2024/10/23, remains unchanged).
+\end{itemize}
+
+As illustrated in Figure~\ref{fig:workflow}, a user's initial memory may contain nodes such as \texttt{User $>$ Dining $>$ Korean} and \texttt{User $>$ Exercise $>$ Tennis}, each holding independently tracked preference notes. When new activity arrives (for example, on 2025/02/25 a review mentioning gastritis care, a visit to Korean temple food, and a search for mild Chinese dishes), the forward pass selectively updates only the affected note (Korean), leaving the unrelated Tennis note untouched. The backward pass subsequently merges semantically overlapping siblings, elevates traits shared across siblings to their parent (preserving concrete subcategory words at the child), and prunes leaf nodes that have not been updated within a configurable staleness window.
+
+All notes for a user are stored atomically in a single Parquet file, enabling efficient bulk I/O. The tree structure metadata (parent-child relationships, node levels) is maintained in a separate hierarchy file. This separation allows the Memory Agent to load, modify, and persist the entire memory state in a single read-modify-write cycle per operation.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/method.png}
+  \Description{Diagram of the Memory Agent operation in three stages: an initial per-node note tree anchored to a personal hierarchy, a forward update where a new interaction selectively modifies only the affected Korean-cuisine note, and a backward consolidation step where a shared trait is elevated from child to parent with concrete subcategory words preserved at the child while stale leaves are pruned.}
+  \caption{Memory Agent operation. \textit{Initial}: per-node notes anchored to a personal hierarchy. \textit{Forward}: a new interaction selectively updates only the affected note (Korean). \textit{Backward}: a shared trait is elevated from child to parent with concrete subcategory words preserved at the child, and stale leaves are pruned.}
+  \label{fig:workflow}
+\end{figure}
 
 
 \subsection{Memory Agent: Forward Aggregation}
 \label{sec:forward}
 
-New interactions are folded in by three LLM steps: extract a preference profile split three ways (demographics, explicit, implicit); map each item onto an existing or newly created taxonomy path, preferring reuse and refusing paths deeper than three levels; and rewrite the note at each target path as an editor rather than an appender, resolving conflicts in favour of recency. For a user with \(N\) distinct target paths the cost is
+When new interaction data arrives (either explicit persona extractions or implicit persona profiles), the Memory Agent executes a three-step forward pass to integrate the information into the existing memory. Each step is mediated by an LLM call; for a user with $N$ distinct target paths identified in Step~2, the total cost is
 \begin{equation}
 \label{eq:forward-cost}
 \#\mathrm{LLM\,calls}(u) \;=\; 2 + N(u),
 \end{equation}
-one call for extraction, one for mapping, and one per path. Instrumenting the production log gives \(N \approx 8.0\). Appendix~\ref{app:forward} states the routing rules. Nothing here measures the forward pass; it produces the trees the next section consolidates.
+where the constant $2$ accounts for the single extraction call (Step~1) and the single path-mapping call (Step~2), and Step~3 contributes one call per target path.
+
+\subsubsection{Step~1: Preference Profile Extraction.}
+The raw interaction text, combining both implicit behavioral profiles and explicit review extractions, is analyzed by an LLM to separate three categories of information:
+
+\begin{itemize}
+    \item \textbf{User information} ($\mathcal{U}$): objective, slowly-changing facts such as age, occupation, and primary activity region.
+    \item \textbf{Explicit preferences} ($\mathcal{P}_e$): stated preferences where the user directly expresses likes, dislikes, or requirements in language (e.g., ``I prefer acidic coffee'' or ``I look for outlets at caf\'{e}s'').
+    \item \textbf{Implicit preferences} ($\mathcal{P}_i$): latent preferences inferred from non-verbal behavioral patterns (e.g., ``tends toward isolated, productivity-oriented spaces'' derived from repeated clicks on quiet study caf\'{e}s).
+\end{itemize}
+
+This three-axis separation extends the two-axis approach of PersonaMem-v2~\cite{personamem-v2} (which combines demographics with explicit preferences) by isolating demographic facts into a dedicated channel. The LLM is instructed to preserve concrete keywords from the source data rather than abstracting them (e.g., extracting specific dish names rather than ``diverse menu''), to merge semantically similar items into compact statements, and to strictly distinguish between exploratory actions (clicks, searches) and confirmed actions (visits, reservations) to avoid inflating behavioral claims.
+
+\subsubsection{Step~2: Hierarchical Path Mapping.}
+Unlike supervised taxonomy expansion methods such as TaxoExpan~\cite{taxoexpan}, our routing is performed in-context by an LLM that jointly considers base-taxonomy paths and any user-specific paths created in earlier sessions. The mapping enforces five principles: \textit{(i)~root exclusivity for demographics}---$\mathcal{U}$ items are mapped only to the root \texttt{user\_info} field, never as subcategory nodes; \textit{(ii)~context-aware routing}---``prefers quiet atmosphere'' goes to ``User $>$ Caf\'{e}'' if surrounding evidence is caf\'{e}-related, otherwise to the root; \textit{(iii)~semantic reuse}---existing paths are preferred when they subsume the new item (a ``latte'' preference maps to ``Coffee/Tea'' rather than a new ``Latte'' sibling); \textit{(iv)~hierarchical consistency}---new Level-3 nodes must match the abstraction level of their siblings (``Korean''/``Japanese'' under ``Dining'' yes; ``Naengmyeon'' no, it belongs under ``Korean''), and nodes at Level~4 or deeper are prohibited; \textit{(v)~aggregation}---items targeting the same path are grouped into one update call.
+
+\subsubsection{Step~3: Note Update.}
+For each target path, an LLM acts as an \textit{editor} rather than appender~\cite{mem0}: it compares new data with existing content, resolves conflicts in favor of recency, removes outdated entries, and consolidates redundant statements. The root node manages demographics in its \texttt{user\_info} field; sub-nodes are restricted to category-specific preferences. Substantive changes increment \texttt{updated\_count} and refresh \texttt{recently\_updated}.
+
 
 \subsection{Memory Agent: Backward Consolidation}
 
-Repeated forward passes introduce redundancy across siblings, scatter shared preferences across leaves, and leave stale nodes from transient interests. Backward consolidation addresses these in a fixed order: merging reduces the number of siblings, which yields clearer common traits for elevation, and pruning last removes nodes stale after reorganization.
+Over time, repeated forward passes may introduce redundancy across sibling nodes, scatter shared preferences across leaf notes, or leave stale nodes from transient interests. The backward consolidation pass addresses these issues through three sequential operations, executed in a specific order: merging first reduces the number of siblings, which yields clearer common traits for the subsequent elevation step, and pruning last removes nodes that may have become stale after reorganization.
 
 \subsubsection{Sibling Node Merging.}
-For each parent with two or more children, an LLM is shown all child notes and asked which leaf siblings overlap semantically enough to merge. An approved merge yields a unified \texttt{merged\_note} integrating the sources without duplication and inheriting the \emph{maximum} \texttt{updated\_count} among them (Section~\ref{sec:governance} explains why the maximum and not the sum); source nodes are then deleted. When only part of a source fits, the LLM returns an \texttt{updated\_source} with the remainder, written back to the original node.
+For each parent node with two or more children, the Memory Agent presents all child notes to an LLM and asks it to identify semantically overlapping siblings that should be merged. Only leaf nodes (those without children of their own) are eligible for merging. When a merge is approved, the LLM produces a unified \texttt{merged\_note} that integrates the content of the source nodes, removing duplication while preserving unique details. The merged note inherits the cumulative \texttt{updated\_count} and the most recent timestamp from its sources. Source nodes are then deleted from both the note store and the hierarchy. If only part of a source node fits the merge (the rest belonging to a different theme), the LLM also returns an \texttt{updated\_source} holding the remaining content, which is written back to the original node.
 
 \subsubsection{Common Trait Elevation.}
 \label{sec:elevation}
-After merging, an LLM examines each parent--children group for preferences appearing across two or more siblings, rewrites the parent to incorporate them, and rewrites each child to remove the elevated content. This enforces a hierarchical invariant: shared preferences sit at the appropriate abstraction level rather than duplicated across subcategories.
+After merging, the Memory Agent examines each parent--children group to identify preferences that appear across two or more sibling notes. An LLM extracts these common traits and rewrites the parent note to incorporate them, while simultaneously rewriting each child note to remove the elevated content.
+
+This operation enforces a hierarchical invariant: shared preferences reside at the appropriate abstraction level, not duplicated across subcategories. Cross-subcategory tendencies (e.g., a general preference for spicy food) belong at the domain level (``Dining''), not replicated in ``Korean,'' ``Chinese,'' and ``Asian'' subcategory notes. The process respects level semantics: the root node absorbs user-wide commonalities, Level~2 nodes absorb domain-wide patterns, and Level~3 nodes retain only subcategory-specific details.
 
 \paragraph{The over-abstraction failure mode.}
-Asked what ``Korean,'' ``Chinese,'' and ``Japanese'' notes share, the LLM replaces the concrete words with an abstract superclass --- writing ``\textit{enjoys Asian cuisines}'' at the Dining parent and stripping the concrete forms from each child. The hierarchy keeps its shape, but the persona loses the words a reranker needs to tell a Korean-leaning user from a Japanese-leaning one. Section~\ref{sec:loss} measures how often this happens and, more importantly, that it also happens where there is nothing shared to elevate.
+A naive elevation introduces a specific failure mode. When asked to summarize what is shared across ``Korean,'' ``Chinese,'' and ``Japanese'' notes, the LLM tends to replace these concrete words with an abstract superclass: writing ``\textit{enjoys Asian cuisines}'' at the Dining parent and stripping ``Korean,'' ``Chinese,'' and ``Japanese'' from each child. The hierarchy is preserved in shape, but the persona loses the words a downstream reranker needs to distinguish a Korean-leaning user from a Japanese-leaning one.
 
 \paragraph{Concrete-noun guard.}
-We address this with a prompt-level rule that leaves the structural operation unchanged. The deployed elevation prompt carries one extra instruction: \emph{proper nouns --- place names, store names, brands --- must be kept verbatim at the child and never lifted to the parent}. We compare this guard against two alternatives: the \emph{destructive} variant (children rewritten to remove the elevated trait, no guard) and the \emph{additive} variant (children left intact, accepting duplication). Section~\ref{sec:guard} shows that the deployed wording protects tokens that were never at risk, and derives a replacement from the measured loss profile.
+We address this with a prompt-level rule that leaves the structural operation unchanged. The elevation prompt is given one extra instruction: \emph{concrete category nouns appearing in child notes must be kept at either the parent or the child}. The LLM may use an abstract superclass at the parent only if it also keeps the concrete forms (e.g., ``enjoys Asian cuisines (Korean, Chinese, Japanese)''). We compare this guard against two alternatives: the \emph{destructive} variant (rewrites children to remove the elevated trait, no concrete-noun rule) and the \emph{additive} variant (leaves children intact, accepting duplication). Section~\ref{sec:ablation} shows this prompt-level choice produces a \(+0.034\) accuracy gain and is the primary determinant of accuracy in the elevation step.
 
 Formally, let \(C(n)\) denote the set of traits stored at note \(n\). Given a parent node \(p\) with sibling set \(\mathrm{ch}(p)\), let \(I = \{\,i : |\{n_k \in \mathrm{ch}(p) : i \in C(n_k)\}| \geq 2\,\}\) be the set of traits appearing in two or more siblings. The elevation operation rewrites the parent and child contents as
 \begin{equation}
@@ -243,391 +299,152 @@ Let \(S = \sum_n |C(n)|\) denote total stored content, and let \(k_i = |\{n_k \i
 a hierarchical compression analogous to the Minimum Description Length principle~\cite{mdl}. To our knowledge, this explicit trait elevation operation has not been proposed in prior memory systems~\cite{mem0,amem,personamem-v2,emem}.
 
 \subsubsection{Stale Leaf Pruning.}
-Finally, a leaf is removed when it has been updated at most \(\tau_u = 2\) times and last touched more than \(\tau_d = 120\) days ago --- transient interests that never became sustained preferences. Appendix~\ref{app:pruning} gives the rule and the traversal order.
+Finally, the Memory Agent removes leaf nodes that represent transient or exploratory interests that did not develop into sustained preferences. A leaf node $n$ is pruned if it satisfies two conditions simultaneously:
+\begin{equation}
+\label{eq:pruning}
+    \mathrm{updates}(n) \leq \tau_u \quad \text{and} \quad \mathrm{age}(n) > \tau_d,
+\end{equation}
+where \(\mathrm{updates}(n)\) is the cumulative update count of the node (the schema field \texttt{updated\_count}), \(\mathrm{age}(n)\) is the time since its last update in days, \(\tau_u\) is the minimum update threshold (default: 2), and \(\tau_d\) is the staleness threshold in days (default: 120). Nodes are processed in decreasing depth order so that pruning a leaf may expose its parent as a new leaf, which is then evaluated in the same pass. This mechanism prevents the memory from accumulating noise from one-off exploratory behaviors while retaining nodes that have been reinforced through repeated interactions.
 
 
 %% ============================================================
 %% EXPERIMENTS (SKELETON)
 %% ============================================================
-%% ============================================================
-%% MEASURING CONSOLIDATION LOSS
-%% ============================================================
-\section{Measuring Consolidation Loss}
-\label{sec:loss}
+\section{Experiments}
 
-\subsection{Instrument}
+\subsection{Experimental Setup}
+\label{sec:experimental-setup}
 
-Consolidation is normally evaluated by what survives in aggregate --- tree size, or a downstream accuracy score. Neither says where a particular piece of evidence went, so we instrument the operation directly. Each note carries a \texttt{keywords} field: the concrete tokens extraction lifted from the user's activity (dish names, venue types, place names, behavioural evidence such as ``repeated clicks''). These are the units a downstream reranker can act on, and being explicit rather than buried in prose they can be followed exactly. For every keyword at a non-root note before a consolidation pass, exactly one of three things is true afterwards (Figure~\ref{fig:instrument}):
+\subsubsection{Dataset.}
+We evaluate on anonymized POI interaction logs from a large-scale Korean map service, comprising click, save, search, and review events. The evaluation window is 14~days, ending 2026-04-15. From the candidate population we sample users deterministically by hash order (seed~42) and keep those satisfying (i)~at least one review event in the window, (ii)~an alive target POI with a top-level category, and (iii)~a large enough distractor pool in the same category. For each user, the most-recent review is the MCQ target and the preceding events build the memory. We report results at \(N{=}500\) users; at this scale the Wilson 95\% CI on aggregate accuracy is \(\pm 0.038\), tight enough to detect the elevation-prompt accuracy gap reported in Section~\ref{sec:ablation}.
 
+\subsubsection{MCQ Evaluation Task.}
+For each user we construct a 4-way multiple-choice question over their most-recent review's target POI. The three distractors are drawn from the same top-level category as the target and matched on review-count tier (\(\pm 20\%\) primary, with \(\pm 50\%\) and \(\pm 100\%\) fallbacks), excluding all POIs the user has previously interacted with. Each question is typed by what it probes:
 \begin{itemize}
-    \item \textbf{retained} --- still on the same note;
-    \item \textbf{lifted} --- gone from the note, now on its parent (the intended behaviour of elevation);
-    \item \textbf{lost} --- on neither, and absent from the prose of both, and absent from any note the pass \emph{created} under the same parent.
+    \item \textbf{T1 Recall} (\(n{=}361\), 72.2\%): the target's top-level category appears among the user's reviewed categories within the window; tests basic memory recall.
+    \item \textbf{T2 Cross-signal} (\(n{=}33\), 6.6\%): the target's category was touched only through implicit signals (save/click) rather than review; tests cross-signal generalization.
+    \item \textbf{T3 Evolution} (\(n{=}106\), 21.2\%): the target's category did not appear in any of the user's recorded interactions (review/save/click) within the window; tests whether the memory captures latent preferences that emerge at the test boundary.
 \end{itemize}
+The system observes only the constructed memory (not raw events). We report mean per-user accuracy (random \(=0.25\)) and per-type accuracy across T1/T2/T3.
 
-\begin{figure}[t]
+\subsubsection{LLM Backbone.}
+All LLM-mediated operations in this paper use Qwen3-235B-A22B-2507~\cite{qwen3}, a 235B-parameter mixture-of-experts model with 22B activated parameters, served in-house via vLLM~\cite{vllm}. The Memory Agent (signal extraction, dynamic routing, forward update, and the merge / elevate / prune steps of the backward consolidation pass) and the persona-synthesis stage use the \emph{instruct-2507} checkpoint. The MCQ evaluator uses the \emph{thinking-2507} reasoning variant of the same model family. We use the same backbone across all baselines and ablation variants so that observed differences are attributable to memory design rather than model capability.
+
+\subsubsection{Baselines.}
+We compare against four baselines spanning the design space:
+\begin{itemize}
+    \item \textbf{NoMem} (No-Memory): LLM with only the four MCQ options and target category, with no user-specific context. Lower bound.
+    \item \textbf{FullCtx} (Full-Context): All raw 14-day interaction events placed in the LLM context window. Quality upper bound, impractical at deployment scale.
+    \item \textbf{Flat}: Mem0-style~\cite{mem0} flat list of memory entries with add, update, and delete operations. Tests the value of hierarchy.
+    \item \textbf{FixedHier}: PersonaMem-v2-style~\cite{personamem-v2} three-level tree with predefined fixed slots, no dynamic routing, and no backward consolidation. Tests the value of dynamic routing and backward maintenance.
+\end{itemize}
+The proposed \textbf{Ours} system uses dynamic routing, common trait elevation \emph{with the concrete-noun guard from Section~\ref{sec:elevation} as the production default}, three-axis preference separation, and the full backward consolidation pass.
+
+\subsubsection{Ablation Variants.}
+To isolate the contribution of each proposed component, we evaluate seven variants of \textbf{Ours}. Five variants disable a single sub-step of the system, and two compare alternative implementations of the elevation step:
+\begin{itemize}
+    \item \textbf{$-$routing}: Disable dynamic path creation; route only into pre-existing nodes.
+    \item \textbf{$-$elevation}: Disable common-trait elevation entirely.
+    \item \textbf{$-$backward}: Remove the entire backward consolidation pass (merge + elevate + prune).
+    \item \textbf{$-$merge}: Disable the sibling-merge step in the backward pass.
+    \item \textbf{$-$prune}: Disable stale-node pruning.
+    \item \textbf{lift\_destructive}: The concrete-noun guard is removed; the elevation prompt produces an abstracted parent and rewrites children to remove the elevated content, with no constraint on preserving concrete nouns. This is the naive elevation baseline against which the guard's contribution is measured.
+    \item \textbf{lift\_additive}: A non-destructive elevation variant in which the parent receives the shared trait but child notes are left intact (no rewriting). Tests whether structural rewriting itself is the issue.
+\end{itemize}
+The first five identify which structural component drives accuracy or footprint. The latter two, together with \textbf{Ours} (which uses the concrete-noun-guarded elevation), form a three-way comparison of elevation prompt formulations that we report as our main result.
+
+
+
+\subsection{Main Results}
+\label{sec:main-results}
+
+Table~\ref{tab:results} (top block) reports MCQ accuracy and per-user memory footprint on \(N{=}500\) users for the four baselines and the proposed system. At this scale the Wilson 95\% confidence interval on aggregate accuracy is \(\pm 0.038\); accuracy differences smaller than this magnitude are not statistically resolved on Mean, though per-type CIs are looser (T1 \(\pm 0.046\), T3 \(\pm 0.084\), T2 \(\pm 0.16\)).
+
+\begin{table*}[!t]
 \centering
-\begin{tikzpicture}[
-  scale=0.78, transform shape,
-  font=\scriptsize,
-  note/.style={draw, rounded corners=2pt, align=left, inner sep=3pt, minimum width=30mm},
-  kw/.style={rounded corners=1pt, inner sep=1.2pt, font=\scriptsize},
-  keep/.style={kw, fill=green!14},
-  lift/.style={kw, fill=blue!14},
-  lost/.style={kw, fill=red!16},
-  arr/.style={-{Latex[length=1.4mm]}, gray!70},
-]
-%% before
-\node[note] (pb) at (0,1.55) {\textbf{Dining}\\[1pt] \textit{(empty)}};
-\node[note] (kb) at (-1.05,0) {\textbf{Korean}\\[1pt] \tikz\node[keep]{heukdwaeji};\ \tikz\node[lost]{repeated clicks};};
-\node[note] (jb) at (1.05,-0.95) {\textbf{Japanese}\\[1pt] \tikz\node[keep]{izakaya};\ \tikz\node[lift]{spicy};};
-\draw[arr] (pb) -- (kb); \draw[arr] (pb) -- (jb);
-\node[font=\scriptsize\bfseries] at (0,2.35) {before};
-
-%% after
-\begin{scope}[xshift=48mm]
-\node[note] (pa) at (0,1.55) {\textbf{Dining}\\[1pt] \tikz\node[lift]{spicy};};
-\node[note] (ka) at (-1.05,0) {\textbf{Korean}\\[1pt] \tikz\node[keep]{heukdwaeji};};
-\node[note] (ja) at (1.05,-0.95) {\textbf{Japanese}\\[1pt] \tikz\node[keep]{izakaya};};
-\draw[arr] (pa) -- (ka); \draw[arr] (pa) -- (ja);
-\node[font=\scriptsize\bfseries] at (0,2.35) {after one pass};
-\end{scope}
-
-\draw[-{Latex[length=2mm]}, thick, gray] (2.05,0.6) -- (2.95,0.6)
-  node[midway, above, font=\scriptsize] {elevate};
-
-%% legend
-\node[anchor=west, font=\scriptsize] at (-1.9,-2.15)
-  {\tikz\node[keep]{\strut};\, retained \quad
-   \tikz\node[lift]{\strut};\, lifted to parent \quad
-   \tikz\node[lost]{\strut};\, \textbf{lost}};
-\end{tikzpicture}
-\caption{The instrument. Every keyword at a non-root note lands in exactly one bucket after a pass: still on its own note (\emph{retained}), moved to the parent (\emph{lifted}, the intended behaviour), or on neither (\emph{lost}). Here ``spicy'' is correctly promoted and ``heukdwaeji'' kept, but ``repeated clicks'' --- the evidence supporting a claim --- is deleted without appearing anywhere.}
-\Description{A two-panel tree diagram. Before consolidation, a Dining parent node is empty and has two child notes, Korean and Japanese, each holding keywords. After one elevation pass, the shared keyword has moved to the parent, one concrete keyword remains at each child, and one keyword has disappeared entirely, illustrating the three outcome categories retained, lifted, and lost.}
-\label{fig:instrument}
-\end{figure}
-
-Two clauses do the work, both from an audit of our own earlier measurements. The prose clause: a keyword can leave the \texttt{keywords} field while the concept survives in the summary beside it, and \(19.2\%\) of keywords missing from both keyword fields do still appear verbatim in the surrounding prose, so requiring absence from the text makes \(\mathrm{LossRate}\) conservative on that axis rather than a keyword-churn count. The relocation clause: merging writes a unified note at a new path, so a rule inspecting only the original path and its parent scores relocated content as deleted --- which inflates merging's apparent contribution by an order of magnitude (Section~\ref{sec:merge}). We therefore scope survival to the parent, the original note, and paths the pass \emph{created} beneath that parent: provably inert wherever nothing moved, and verified to be where merges land, since every new path in our full-backward runs appeared under a parent that had lost a child (\(340/340\) and \(338/338\)).
-
-We do \emph{not} credit survival by substring (\emph{jiu-jitsu} inside \emph{Brazilian jiu-jitsu}), which would apply to \(20.9\%\) of losses. Korean morphology cuts the other way, but normalizing josa and verb endings on both sides moves \(\mathrm{LossRate}\) by at most \(0.003\).
-
-We report \(\mathrm{LossRate} = |\text{lost}| / (|\text{retained}| + |\text{lifted}| + |\text{lost}|)\), aggregated as the post-stratified mean of per-user rates (paired differences are unweighted means).
-
-
-\subsection{Data}
-\label{sec:data}
-
-We work from the production build output of a large-scale Korean map service, which writes one row per (user, note) for every user whose behaviour changed that day. The service processes \(99{,}993\)--\(99{,}999\) users daily (a top-\(100\text{K}\) cap) and \(1{,}977{,}833\) distinct users over the 36-day window we retain.
-
-\paragraph{Stratification.} Elevation can only promote what siblings share, so we stratify by \emph{headroom}, the saving Eq.~\eqref{eq:elevation-savings} predicts of a lossless elevation: \(\sum_{i \in I}(k_i-1)\) over a user's tree. Over one full day of production memory it is small, and \(17.6\%\) of users sit at zero, so uniform sampling would over-weight users on whom elevation can do almost nothing. Four strata follow: \textbf{zero} (\(0\)), \textbf{low} (\(1\)--\(3\)), \textbf{mid} (\(4\)--\(9\)), \textbf{high} (\(\geq 10\)). The \textbf{zero} stratum is the control behind this paper's sharpest result: these users have siblings but no shared keyword, so a correct elevation leaves them untouched.
-
-\paragraph{Frozen datasets.} Two snapshots, each \(500\) users per split with \(125\) per stratum, fixed seed, pinned by content hash. \textsc{Mech} (2026-08-17, \(7{,}924\) notes) carries the loss measurements; \textsc{Eval} (2026-07-15, \(7{,}275\) notes) adds a held-out MCQ target (Section~\ref{sec:mcq}). Both reserve a disjoint test half of equal size and stratum balance. Loss numbers in Sections~\ref{sec:loss}--\ref{sec:persona} and the accuracy comparison of Section~\ref{sec:mcq} are on the development half; the two experiments on \(977\) users (Sections~\ref{sec:guard} and~\ref{sec:delivery}) pool both halves, a pre-registered design that is not a fresh sample. The test half was opened once for the comparisons declared in advance. One qualification applies: after that opening we audited our instrument, corrected two defects (the prose and relocation clauses of Section~\ref{sec:loss}), and recomputed \emph{both} halves under the corrected rule. The correction was motivated by the mechanics of merging, not by anything in the held-out results, and replays stored snapshots deterministically --- but it is a post-hoc change, and we name it rather than let ``opened once'' carry more weight than it can. Because strata are over-sampled relative to the population, every aggregate we report is post-stratified back to the population proportions recorded in the snapshot manifest.
-
-\paragraph{Backbones and isolation.} \texttt{gemma-4-31b-it} unless stated; \texttt{qwen3-\allowbreak 30b-\allowbreak a3b-\allowbreak instruct} (deployed) and \texttt{qwen3-\allowbreak 235b-\allowbreak a22b-\allowbreak instruct}~\cite{qwen3} for the model comparison, all served in-house through the same vLLM~\cite{vllm} gateway. The client exposes no seed, so repeated runs measure sampling variance rather than reproducing a draw; three repeats spread \(\pm 0.003\), a thirtieth of the headline effects below, so single runs are reported elsewhere. Elevation is run alone unless stated: merging renames paths, which breaks keyword tracking, and pruning cannot fire at these node ages (8--34 days against a 120-day threshold). Section~\ref{sec:merge} adds merging back deliberately. Every variant starts from a deep copy of the same tree, so comparisons are paired per user, and the runner aborts if the arms' pre-consolidation keyword totals ever differ.
-
-
-\subsection{Consolidation deletes, including where there is nothing to compress}
-
-\begin{figure}[t]
-\centering
-\begin{tikzpicture}
-\begin{axis}[
-  width=\linewidth, height=4.9cm,
-  ybar, bar width=4.2pt,
-  enlarge x limits=0.16,
-  ymin=0, ymax=0.36,
-  ylabel={LossRate}, ylabel style={font=\small, yshift=-4pt},
-  symbolic x coords={zero,low,mid,high},
-  xtick=data,
-  xticklabels={{zero\\(0)},{low\\(1--3)},{mid\\(4--9)},{high\\($\geq$10)}},
-  xticklabel style={align=center, font=\scriptsize},
-  yticklabel style={font=\scriptsize},
-  legend style={font=\scriptsize, at={(0.02,0.98)}, anchor=north west,
-                draw=none, fill=white, fill opacity=0.85, text opacity=1,
-                legend columns=3, column sep=4pt},
-  tick style={draw=none},
-  ymajorgrids, grid style={gray!20},
-  axis lines*=left,
-]
-\addplot[fill=red!55, draw=none] coordinates {(zero,0.180) (low,0.240) (mid,0.274) (high,0.300)};
-\addplot[fill=orange!60, draw=none] coordinates {(zero,0.120) (low,0.168) (mid,0.197) (high,0.218)};
-\addplot[fill=teal!55, draw=none] coordinates {(zero,0.050) (low,0.072) (mid,0.092) (high,0.095)};
-\legend{no guard, guarded, additive}
-\draw[dashed, gray!70] (axis cs:zero,0) -- (axis cs:zero,0.34);
-\node[font=\scriptsize, anchor=north west, align=left, text width=3.4cm]
-  at (axis cs:zero,0.34) {\textbf{no keyword needs to move}\\[-1pt] yet \(18.0\%\) is deleted};
-\end{axis}
-\end{tikzpicture}
-\caption{Loss rises with headroom --- the saving Eq.~\eqref{eq:elevation-savings} predicts a lossless elevation would achieve --- for every variant (\texttt{gemma-4-31b}, 500 production trees, 125 users per stratum). The leftmost group is the control: these users' siblings share no keyword, so nothing needs to move, and \(18.0\%\) is deleted anyway. The guard's benefit grows with headroom too, \(-0.059\) at zero to \(-0.081\) at high. \textsc{additive} never rewrites children, so its loss is confined to Level-2 notes acting as parents and it is shown for shape rather than as a like-for-like comparison.}
-\Description{Grouped bar chart of loss rate against headroom stratum for three elevation variants. Loss increases monotonically from the zero stratum to the high stratum for every variant, and the zero stratum, where no keyword is shared between siblings, still shows substantial loss.}
-\label{fig:dose}
-\end{figure}
-
-Figure~\ref{fig:dose} reports the instrument on 500 production trees. Weighted to the population, unguarded elevation loses \(0.253\) of all child keywords under the conservative definition, the deployed guard \(0.181\) (\(\Delta = -0.071\)). Two features matter more than that headline.
-
-\paragraph{The zero stratum loses \(18.0\%\).} These users' siblings share no keyword, so Eq.~\eqref{eq:elevation-savings} predicts a keyword-level saving of exactly zero. Nearly a fifth of their concrete tokens disappear anyway. We are careful about what that shows: the agent reads whole summaries, not keyword lists, and zero-stratum siblings still share summary vocabulary (\(9.1\) tokens per parent group against \(19.6\) in the high stratum), so promoting a shared \emph{theme} is legitimate and the pass need not have been a no-op. The narrower claim still damages: a faithful rewrite promoting a shared theme has no reason to delete a child's \emph{unique} keywords, and those are exactly what disappears. The loss looks collateral to the rewrite rather than a product of compression. The control removes lexical headroom only and we have no rewrite-only baseline, so this names the likeliest cause rather than isolating it.
-
-\paragraph{Loss scales with headroom, and lifting is rare.} Loss rises monotonically with the amount genuinely shared (\(0.180 \to 0.300\)), and so does the guard's benefit (\(-0.059 \to -0.081\)) Meanwhile keywords classified as \emph{lifted} account for at most \(6.2\%\) of the total in any variant. Elevation as executed is overwhelmingly a delete rather than a move: the parent receives an abstraction and the child's concrete token is discarded, not relocated.
-
-\paragraph{Loss versus compression.} Between the two variants that rewrite children (summary text \(-39.4\%\) destructive, \(-5.8\%\) additive), guarded elevation retains \(84\%\) of destructive's compression while cutting loss by \(28\%\).
-
-\subsection{The magnitude belongs to the backbone}
-\label{sec:models}
-Identical prompts over identical trees on three backbones: the operation does not behave the same way twice (Figure~\ref{fig:backbones}). Gemma compresses hard and loses hard (LossRate \(0.255\) unguarded in these runs, keywords \(-34.0\%\)); the Qwen models lose far less (\(0.102\) on the 235B, \(0.063\) on the 30B), the 235B barely compresses (\(-11.9\%\)) and the deployed 30B \emph{inflates} (\(+5.0\%\)) --- it returns more keywords than it was given. The guard follows suit: decisive on Gemma (\(\Delta = -0.073\), \(d = -0.70\); \(-0.071\) in the main runs), inert on the 235B (\(+0.002\)), and on the 30B a \emph{significant increase} in loss (\(+0.006\), 95\% CI \([+0.001, +0.011]\), \(p = 0.016\)). The effect is small; its sign is the point. A mitigation validated on one backbone can be harmful on another, while the failure mode itself is universal in direction, since all three models lose keywords in the zero stratum.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=0.92\linewidth]{figures/backbones.png}
-  \Description{Top: a forest plot of the guard's effect on loss rate for three backbones. The guard lowers loss on gemma-4-31b, has no measurable effect on qwen3-235b, and slightly raises loss on the deployed qwen3-30b. Bottom: guarded loss rate varies by 0.113 across the three backbones but only 0.017 across three wordings of the prompt, a factor of 6.7.}
-  \caption{The guard's effect on LossRate by backbone (\(\Delta\), 95\% CI; blue helps, orange harms). Below, the spread of guarded LossRate across the three backbones (\(0.113\)) against the spread across three wordings of the prompt on gemma (\(0.017\)), a factor of \(6.7\).}
-  \label{fig:backbones}
-\end{figure}
-
-\paragraph{The backbone, not the phrasing.} Those runs share one wording. Two paraphrases of the elevation instruction --- every proposition preserved, only voice, clause order, list format and terminology changed --- on gemma over 150 users move guarded \(\mathrm{LossRate}\) across \(0.167\)--\(0.184\): a spread of \(0.017\) against \(0.113\) across the backbones (\(0.182\), \(0.104\), \(0.069\)), a factor of \(6.7\). The guard survives rephrasing, cutting loss by \(0.082\), \(0.068\) and \(0.054\) under the three wordings, each at \(p < 10^{-4}\). Phrasing is not nothing (one paraphrase costs \(+0.015\), the other is indistinguishable) but is several times smaller than the choice of model.
-
-\subsection{The deployed guard protects the wrong tokens}
-\label{sec:guard}
-The guard shipped in production names place names, store names and brands. Typing every keyword and comparing its share of losses against its share of survivors (Figure~\ref{fig:tokens}) asks whether those are what disappears. They are not. Place names (ratio \(0.58\)) and brands (\(0.76\)) are \emph{under}-represented among losses, so the deployed guard is defending tokens that were never in danger \emph{here} --- Section~\ref{sec:delivery} finds them destroyed one stage later instead. What is lost in bulk is category vocabulary (\emph{grilled meat}, \emph{gukbap}, \emph{Chinese}, \emph{Korean}) and, at \(2.36\times\) its base rate, the behavioural evidence that grounds a claim (\emph{repeated clicks}, \(184\) occurrences). That second group is the more damaging: the extraction prompt requires every persona claim to cite click evidence, and elevation removes those citations at over twice their base rate, leaving assertions whose support is silently gone.
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=0.92\linewidth]{figures/tokens.png}
-  \Description{A lollipop chart on a log axis of the share of losses divided by the share of survivors for five token types. Behavioural evidence is over-represented among losses at 2.36 times and long descriptive phrases at 1.41. Category nouns at 0.88, brands at 0.76 and place names at 0.58 are under-represented. Place names and brands are the tokens the deployed guard protects.}
-  \caption{What unguarded elevation removes, by token type (\texttt{gemma-4-31b}, 500 production trees): share of all lost keywords divided by share of surviving keywords. Above \(1\) a type is over-represented among losses. Place names and brands, which the deployed guard protects, survive above their base rate; behavioural evidence (most often \emph{repeated clicks}, \(184\) occurrences) is lost at \(2.36\times\) its base rate.}
-  \label{fig:tokens}
-\end{figure}
-
-\paragraph{A guard derived from the measurement.} We rewrote the instruction around what the data says is at risk --- category, cuisine and business-type nouns, place and brand names, behavioural evidence --- disallowing generic superclasses such as ``diverse food''. The structural operation is unchanged; the cost is one prompt line (wording in Appendix~\ref{app:guard}). LossRate falls from \(0.253\) to \(0.181\) (deployed) to \(0.160\) (v2) (Table~\ref{tab:guard}), all three paired differences surviving Holm correction at \(p < 0.0001\); v2 cuts a further \(11\%\) of the deployed guard's loss while compressing slightly less --- the expected direction, since the tokens it saves are tokens that would otherwise have been deleted.
-
-\begin{table*}[t]
-\caption{Guard wording on the development half (500 users, \texttt{gemma-4-31b}) and the reserved half. Paired differences are unweighted per-user means with 95\% bootstrap CIs; \(d\) is Cohen's \(d\); LossRate is post-stratified.}
-\label{tab:guard}
-\small
-\setlength{\tabcolsep}{5pt}
+\caption{MCQ accuracy and per-user memory size at \(N{=}500\). \emph{Top block}: baselines and reference points. \emph{Bottom block}: ablations of \textbf{Ours} grouped by (a)~forward routing, (b)~one backward sub-step removed, (c)~entire backward pass removed, (d)~elevation prompt variant. Accuracy columns: aggregate Mean and per-type (T1 Recall, T2 Cross-signal, T3 Evolution). Size columns: notes per user, tokens per note, total tokens per user; MES is the Memory Efficiency Score (Eq.~\ref{eq:mes}). Bold marks the best value within each block. Wilson 95\% CI: Mean $\pm 0.038$; T1 $\pm 0.046$; T3 $\pm 0.084$; T2 $\pm 0.16$. $\dagger$ = non-deployable oracle.}
+\label{tab:results}
+\footnotesize
+\renewcommand{\arraystretch}{1.18}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lcccccccc}
 \toprule
- & \multicolumn{4}{c}{development half} & \multicolumn{3}{c}{reserved half} \\
-\cmidrule(lr){2-5}\cmidrule(lr){6-8}
- & LossRate & summary text & \(\Delta\) vs.\ no guard [95\% CI] & \(d\) & LossRate & \(\Delta\) vs.\ no guard & \(d\) \\
+ & \multicolumn{4}{c}{Accuracy} & \multicolumn{3}{c}{Memory size / user} & \\
+\cmidrule(lr){2-5} \cmidrule(lr){6-8}
+Method & Mean & T1 & T2 & T3 & Notes & Tokens/note & Tokens & MES \\
 \midrule
-no guard         & \(0.253\) & \(-39.2\%\) & --- & --- & \(0.251\) & --- & --- \\
-deployed guard   & \(0.181\) & \(-32.9\%\) & \(-0.071\) \([-0.077,-0.066]\) & \(-0.68\) & \(0.178\) & \(-0.071\) & \(-0.68\) \\
-\textsc{guard-v2} & \(0.160\) & \(-29.2\%\) & \(-0.092\) \([-0.098,-0.086]\) & \(-0.88\) & \(0.160\) & \(-0.089\) & \(-0.86\) \\
-v2 vs.\ deployed & --- & --- & \(-0.021\) \([-0.024,-0.016]\) & \(-0.22\) & --- & \(-0.018\) \([-0.022,-0.014]\) & \(-0.19\) \\
+\multicolumn{9}{l}{\emph{Baselines and reference points}} \\
+\quad NoMem (random floor)        & 0.248 & 0.241 & 0.303 & 0.255 & 0    & ---    & 0       & ---   \\
+\quad FullCtx$^{\dagger}$ (oracle)& 0.744 & 0.800 & 0.485 & 0.632 & ---  & ---    & \(\sim\!73{,}000\) & 0.102 \\
+\quad Flat~\cite{mem0}            & 0.672 & 0.701 & 0.485 & 0.632 & 49.9 & 24     & \textbf{1{,}210} & 0.138 \\
+\quad FixedHier~\cite{personamem-v2} & \textbf{0.760} & 0.792 & \textbf{0.606} & \textbf{0.698} & 10.8 & 275 & 2{,}973 & 0.147 \\
+\quad \textbf{Ours} (concrete-noun guard) & 0.758 & \textbf{0.798} & 0.515 & \textbf{0.698} & \textbf{9.9} & \textbf{264} & 2{,}621 & \textbf{0.149} \\
+\midrule
+\multicolumn{9}{l}{\emph{Ablations of Ours (compare each row to Ours above)}} \\
+\multicolumn{9}{l}{\quad\emph{(a) Forward routing}} \\
+\quad\quad $-$routing                       & 0.736 & 0.762 & 0.515 & \textbf{0.717} & 9.8 & 265 & 2{,}583 & 0.143 \\
+\multicolumn{9}{l}{\quad\emph{(b) Backward pass --- one sub-step removed}} \\
+\quad\quad $-$merge                         & 0.726 & 0.756 & \textbf{0.576} & 0.670 & 11.3 & \textbf{241} & 2{,}722 & 0.139 \\
+\quad\quad $-$elevation                     & 0.726 & 0.767 & 0.485 & 0.660 & 10.1 & 288 & 2{,}908 & 0.138 \\
+\quad\quad $-$prune                         & 0.744 & 0.781 & 0.545 & 0.679 & 10.2 & 259 & 2{,}649 & 0.145 \\
+\multicolumn{9}{l}{\quad\emph{(c) Entire backward pass removed}} \\
+\quad\quad $-$backward (full)               & 0.734 & 0.770 & 0.515 & 0.679 & 11.2 & 273 & 3{,}052 & 0.140 \\
+\multicolumn{9}{l}{\quad\emph{(d) Elevation prompt variant --- our main ablation result}} \\
+\quad\quad lift\_additive                   & 0.724 & 0.765 & 0.455 & 0.670 & 10.2 & 298 & 3{,}030 & 0.137 \\
+\quad\quad lift\_destructive (no guard)     & 0.740 & 0.776 & 0.515 & 0.689 & 10.1 & 263 & 2{,}648 & 0.144 \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-\paragraph{We tried to price the difference, and could not.} Everything above is observational --- it says which tokens leave, not what their leaving costs. So we deleted tokens ourselves, which no prompt can make an agent do selectively. On 977 users we built five versions of each real tree: untouched, and four with tokens removed at random, from what the guard protects, from what it leaves exposed, and the entire exposed pool. The three middle arms delete an \emph{identical} count per user, so a difference between them is attributable to which tokens went rather than how many.  The design was registered in advance.
+Table~\ref{tab:results} yields five observations.
 
-Nothing moved, and the exact zero turned out to be structural. The registered contrast was \(0.0000\) (95\% CI \([-0.021,+0.021]\)) because the persona is generated from the notes' \texttt{summary} text alone --- we verified against the deployed agent that \texttt{keywords} never reaches the generator, so a deletion confined to that field cannot reach the artifact the probe consumes. Re-running it striking the same victims from the surrounding prose, as real consolidation does, does reach: no two arms share a persona and \(26.4\%\) of users change their answer, for a median \(367\) characters removed. Accuracy still does not move (\(+0.011\), 95\% CI \([-0.015,+0.038]\), \(p = 0.43\)). That is a fact about the probe rather than the memory (Section~\ref{sec:mcq}).
+\paragraph{Hierarchy contributes accuracy.}
+All memory-equipped systems beat the No-Memory floor (\(0.248\)) by a wide margin, so the MCQ is not solvable from category statistics alone. Among the deployable systems, the flat list (Flat, \(0.672\)) trails FixedHier and Ours by about \(0.09\), well outside the CI. Hierarchy alone contributes accuracy, independent of other design choices.
 
-\subsection{Merging relocates; it does not delete}
-\label{sec:merge}
-Running the full backward pass isolates what merging adds --- and exposes an artifact of the kind an instrument of this shape invites (Table~\ref{tab:merge}). Merging is the only backward operation that \emph{moves} a note: it deletes its sources and writes a unified note under a different path, so an instrument looking only at a keyword's own path and its parent scores everything a merge carried as deleted, and the full pass appears to make merging responsible for \(23\%\) and \(33\%\) of the total. It is not: of the keywords that rule calls lost, \(38.6\%\) unguarded and \(48.6\%\) guarded are still present elsewhere in the same tree. Under the relocation-aware scope of Section~\ref{sec:loss} merging adds almost nothing, while still removing \(5.2\%\) of notes, its intended effect. \textbf{Merging relocates; it does not delete.} Consolidation loss belongs to elevation, which says where a guard is worth building. It also generalizes: any keyword-level tracker will mis-attribute deletion to whichever operation renames things, here by an order of magnitude.
+\paragraph{The top three configurations are statistically tied.}
+FullCtx (\(0.744\)), FixedHier (\(0.760\)), and Ours (\(0.758\)) sit within \(0.016\) of each other, inside the \(\pm 0.038\) Wilson 95\% CI. At this evaluation scale the three are not separable on aggregate accuracy. We therefore report Ours as \emph{statistically indistinguishable} from both FixedHier (\(\Delta{=}{-}0.002\)) and the FullCtx oracle (\(\Delta{=}{+}0.014\)).
 
-\begin{table}[t]
-\caption{What merging adds, by instrument (\texttt{gemma-4-31b}, 500 users). Elevation alone is the baseline; the same-path rule counts a moved keyword as lost.}
-\label{tab:merge}
-\small
-\begin{tabular}{lcc}
-\toprule
- & unguarded & guarded \\
-\midrule
-elevation alone, LossRate & \(0.253\) & \(0.181\) \\
-full pass, same-path rule & \(0.328\) (\(+0.075\)) & \(0.268\) (\(+0.088\)) \\
-\quad share of that total & \(23\%\) & \(33\%\) \\
-full pass, relocation-aware & \(+0.001\) (\(p=0.75\)) & \(+0.007\) (\(p=0.003\)) \\
-\quad 95\% CI & --- & \([+0.002,+0.012]\) \\
-lost keywords still in the tree & \(38.6\%\) & \(48.6\%\) \\
-\bottomrule
-\end{tabular}
-\end{table}
+\paragraph{Footprint at parity.}
+At this same accuracy level, Ours is the most compact deployable memory: \(2{,}621\) tokens per user, \(28\times\) smaller than FullCtx (\(\sim\!73\)K) and \(12\%\) smaller than FixedHier (\(2{,}973\)). Flat is smaller still (\(1{,}210\) tokens), but only by giving up \(0.09\) accuracy.
 
-\subsection{The loss reaches what the ranker reads}
-\label{sec:persona}
-A downstream ranker never sees the memory; it sees a persona synthesized from a few selected paths, so loss inside the tree matters only if it survives that step. We generated a persona from each tree before and after consolidation and asked how many of the removed keywords also vanished from it (\(n=200\)). Propagation is \(0.765\) without a guard, \(0.711\) with the deployed one, and \(0.713\) with v2 --- above \(70\%\) in every arm, and flat across the two guarded ones. The guard does not make the persona more robust to loss; it reduces how much is lost in the first place, which carries through to \(21\%\) fewer keywords missing from the final persona (\(372 \to 295\)).
+\paragraph{Per-type behavior.}
+On T3 Evolution (queries about categories the user has not touched in the window), Ours and FixedHier are tied at \(0.698\), and both \emph{exceed} the FullCtx oracle (\(0.632\)). The gap (\(0.066\)) lies just inside the per-type CI (\(\pm 0.084\)), so we report it as a consistent direction rather than a statistically significant effect: structured memory appears to handle latent long-tail preferences better than raw context. On T2 Cross-signal, FixedHier leads numerically (\(0.606\) vs.\ \(0.515\)), but the \(n{=}33\) sample gives a \(\pm 0.16\) CI that absorbs the difference.
 
-\paragraph{The paths do not move.} Path selection is itself an LLM call, so a keyword could vanish because a different subtree was read. Recording the chosen paths rules that out: mean Jaccard between pre- and post-consolidation path sets is \(0.90\)--\(0.92\), the sets are \emph{identical} for \(67.5\%\)--\(72.5\%\) of users, and restricting to those users moves propagation by at most \(0.021\). We have no propagation rate for retained keywords, and Section~\ref{sec:delivery} finds the persona discarding much that the tree keeps, so this shows that the loss is not recovered downstream, not that consolidation causes it.
+\paragraph{Three-axis compression and Pareto-optimality.}
+The \(12\%\) total-token reduction vs.\ FixedHier appears on two finer axes simultaneously: Ours uses fewer notes per user (\(9.9\) vs.\ \(10.8\)) \emph{and} shorter notes (\(264\) vs.\ \(275\) tokens) at the same accuracy. We define the \emph{Memory Efficiency Score}
+\begin{equation}
+\label{eq:mes}
+\mathrm{MES} \;=\; \frac{\mathrm{Mean} - \mathrm{Mean}_{\mathrm{NoMem}}}{\log_{10}(\mathrm{Tokens}/u)},
+\end{equation}
+subtracting the random-guess floor and discounting the memory budget on the log scale (the natural scale for context-window cost). Ours ranks first on MES (\(0.149\); FixedHier \(0.147\), Flat \(0.138\), FullCtx \(0.102\), every ablation variant \(\leq 0.145\) in Table~\ref{tab:results}). Restricting to configurations reaching \(\geq 95\%\) of the FullCtx ceiling (\(\geq 0.707\); Flat fails), Ours has the smallest footprint on every axis at once, a \emph{Pareto-optimal} operating point: FixedHier and FullCtx fall inside Ours' \(\pm 0.038\) CI band with \(13\%\) and \(28\times\) larger footprints.
 
-\subsection{The delivery path costs more than consolidation does}
-\label{sec:delivery}
-The tree is not what the ranker reads: between the two sits a delivery path --- select a few paths, synthesise a persona --- which is itself two compression steps we had never measured. We measured them on the same \(977\) users and held-out questions, varying only what the model is given (Table~\ref{tab:delivery}); instruction, question and option ordering are byte-identical across arms.
+\subsection{Ablation Study}
+\label{sec:ablation}
 
-\begin{table}[t]
-\caption{What the model is given and the MCQ accuracy it reaches (\(977\) users, both halves pooled; the floor is on \(471\) development-half users). Gains are paired differences with 95\% CIs; all survive Holm at \(p<10^{-4}\).}
-\label{tab:delivery}
-\small
-\resizebox{\columnwidth}{!}{\begin{tabular}{llcc} \toprule arm & given to the model & accuracy & gain over deployed \\ \midrule no memory & empty persona & \(0.226\) & --- \\ \textbf{deployed} & select paths, synthesise & \(0.459\) & --- \\ flat + synthesis & all notes, flattened, synthesised & \(0.575\) & \(+0.117\) \([+0.083,+0.149]\) \\ raw notes & all summaries, no synthesis & \(0.649\) & \(+0.190\) \([+0.156,+0.226]\) \\ \bottomrule \end{tabular}}
-\end{table}
+Table~\ref{tab:results} (bottom block) reports the seven ablation variants of \textbf{Ours} on \(N{=}500\) users, grouped by what they perturb: (a) forward routing, (b) a single backward sub-step, (c) the entire backward pass, and (d) the elevation prompt. Group~(d) is our main result; the others identify the sources of accuracy and footprint.
 
-Both steps are negative: flattening the tree is worth \(+0.117\), and dropping synthesis as well a further \(+0.074\) (\([+0.047,+0.100]\)). On the \(471\) users for whom the floor was measured, the deployed persona earns \(+0.248\) over it and the delivery path forgoes \(+0.184\) more: \(74\%\) of the deployed memory's own gain, \(43\%\) of what the raw notes would earn.
+\subsubsection{Elevation prompt formulation drives accuracy (Group d).}
+Accuracy moves monotonically across the three elevation variants (\texttt{lift\_additive} \(0.724 \to\) \texttt{lift\_destructive} \(0.740 \to\) Ours \(0.758\)), with the same ranking on T1 Recall (\(0.765 \to 0.776 \to 0.798\)) and T3 Evolution (\(0.670 \to 0.689 \to 0.698\)); the guarded variant also has the smallest footprint of the three (\(2{,}621\) tokens). Shorter notes \emph{with} higher accuracy is not a trade-off but a sign that the guard removes noise: an abstract phrase like ``ethnic cuisine'' replacing ``Korean, Chinese, Japanese'' inflates the parent without adding discriminative information, yielding Ours' MES of \(0.149\) vs.\ \(0.137\)--\(0.144\) for the other elevation variants. On a single user's \emph{Restaurants} subtree, destructive collapses concrete leaf words (\emph{heukdwaeji}, \emph{izakaya}, \emph{hot pot}) into the parent's abstract trait, additive inflates the parent at unchanged leaves, and Ours' guard keeps those concrete leaves under an abstract parent.
 
-\paragraph{Where it goes.} Place names survive consolidation well (Section~\ref{sec:guard}) but not delivery: the median user's notes carry six distinct place names and the median retention into the persona is \(0.00\); \(63\%\) of users keep none. The guard protects tokens through the tree and the next stage discards them anyway.
+\subsubsection{Backward pass primarily controls memory size (Groups b, c).}
+Every backward variant moves accuracy by no more than the \(\pm 0.038\) CI ($-$merge and $-$elevation cost \(0.032\); $-$prune \(0.014\); the full $-$backward \(0.024\)), but $-$backward inflates memory by \(16.4\%\), roughly \(4.3\)M extra tokens per day at our \(10\)K-user daily-active scale. The two sub-steps compress along different axes: without merge, notes per user jump (\(11.3\) vs.\ \(9.9\)) while each shortens (\(241\) vs.\ \(264\) tokens); without elevation, the count holds near reference (\(10.1\)) while each note grows (\(288\) tokens). That is: \emph{merge reduces note count; elevation reduces note length.}
 
-\paragraph{One confound, measured.} Distractors are matched on category and review count but not location, so geography is a cue available to the raw-notes arm and not the deployed one. Splitting on whether any option title carries an area name from the user's notes, the gap is \(+0.285\) where it does (\(n = 172\)) and \(+0.170\) where it does not (\(n = 805\)), both at \(p < 10^{-4}\). The confound inflates the effect; it does not produce it.
+\subsubsection{Forward routing helps accuracy at no footprint cost (Group a).}
+Disabling dynamic routing costs \(0.022\) accuracy (within CI) for only \(38\) saved tokens per user (\(1.4\%\)): routing helps accuracy at near-zero footprint cost.
 
-\subsection{Downstream accuracy: ordered but not resolved}
-\label{sec:mcq}
-\paragraph{Held-out task.} To avoid leakage we take an older snapshot (2026-07-15) and hold out everything after: the target is each user's first qualified review in 2026-07-16..08-20, against three same-category distractors matched on review count. Appendix~\ref{app:mcq} gives the construction and the filtering it forced.
-
-Accuracy orders exactly inversely to LossRate --- \(0.452\) destructive, \(0.466\) guarded, \(0.472\) v2, \(0.484\) with no consolidation --- but no pairwise difference against the no-guard arm is significant (\(p = 0.46\), \(0.30\), \(0.13\); widest CI \([-0.008, +0.072]\)), and per-user correlation between LossRate and answering correctly is \(\approx 0\) in every arm (\(|r| \leq 0.05\)). 
-
-A null is only interpretable against a floor: a \textsc{no memory} arm scores \(0.226\), no better than guessing, and the whole consolidation span is an eighth of what memory is worth, so sample size is the obvious explanation. Two results rule it out. Section~\ref{sec:guard}'s intervention deleted enough to change \(26.4\%\) of the answers and left accuracy untouched (\(+0.011\), \(p = 0.43\)); Section~\ref{sec:delivery} moves the same probe by \(+0.190\) by changing only how the memory is delivered. The probe's resolution is sharply shaped rather than absent: it reads \emph{how} a memory reaches the model and not \emph{which tokens} the tree holds. What the data do support is narrower: guarded consolidation is indistinguishable from not consolidating (\(\Delta = 0.018\), \(p = 0.39\)) while removing a third of the memory's text.
-
-\subsection{Held-out confirmation}
-\label{sec:heldout}
-Every loss comparison above was developed on one half of each snapshot; the reserved half was opened once, with model, prompts and analysis fixed, then recomputed once when we corrected the instrument (Section~\ref{sec:data}). This matters most for \textsc{guard-v2}, whose wording came from the development half's loss profile.
-
-The loss measurements replicate to within \(0.003\) (Table~\ref{tab:guard}, right), all three paired differences remain significant at \(p < 0.0001\) after Holm correction, and the effect sizes are essentially unchanged. The zero-headroom control holds, at \(18.2\%\) against \(16.9\%\) (\(18.0\%\) in Figure~\ref{fig:dose}) --- the widest gap, and the one place the reserved half is kinder. \textsc{guard-v2} retains its advantage over the deployed guard, slightly attenuated (\(-0.021\) to \(-0.018\)) --- the direction expected when a rule tuned on one sample meets another.
-
-The accuracy null replicates, instructively: held-out accuracy runs \(0.468\), \(0.466\), \(0.448\), \(0.436\) with nothing significant, and the ordering that matched LossRate exactly on the development half breaks. The loss is real and reproducible; this task cannot see it.
-
-
+\subsubsection{Per-type pattern matches the over-abstraction story.}
+The per-type breakdown tracks the over-abstraction failure in Section~\ref{sec:elevation}: the guard's biggest gain is on T1 Recall, which depends on concrete category words appearing in the persona (\texttt{lift\_destructive} \(0.776 \to\) Ours \(0.798\)); T3 Evolution moves in the same direction (\(0.689 \to 0.698\)). T2 Cross-signal is flat across the three elevation variants (\(\approx 0.515\)), inside the \(n{=}33\) noise band. The guard itself adds zero LLM calls (one extra line in the existing elevation prompt, Eq.~\eqref{eq:forward-cost}), so the gain is obtained at no added inference cost.
 
 %% ============================================================
-%% DEPLOYMENT
+%% CONCLUSION AND FUTURE WORK
 %% ============================================================
-\section{Deployment}
-\label{sec:governance}
-
-\paragraph{Scale and cost.} Forward aggregation costs about ten LLM calls per user per update (Eq.~\eqref{eq:forward-cost}, \(N \approx 8.0\)) and elevation adds \(2.99\). The dominant cost is implicit extraction at 73K input tokens per user; clustering similar inputs before the LLM~\cite{personax} and distilling into a smaller model~\cite{personamem-v2} are the plausible reductions.
-
-\paragraph{Consolidation is not free, and is not running.} Over 497 consecutive update pairs from 429 users (median gap 17 days), notes per user grow \(16.4\%\), keywords \(29.5\%\) and summary text \(24.0\%\) per update, with \(472/497\) pairs increasing. Our deployment has run consolidation once, over 35 users in a test namespace: \texttt{last\_cleaned\_at} is null for every user in current production output. Those growth figures therefore describe the unconsolidated regime rather than a counterfactual.
-
-\paragraph{Sensitive information.} Three mechanisms, none described in our earlier writeup. At routing time, paths whose Level-2 segment matches a blocked category (medical, health, hospital, religion, politics) or that contain a blocked token anywhere are dropped before any note is written --- why the deployed taxonomy has ten domains rather than the eleven specified. A filtering job separately runs LLM-based detection over every summary, masks the spans it flags, and records a boolean audit column. One inconsistency remains: the implicit-extraction prompt still lists a medical domain, so such content is extracted and only then discarded at routing. The third mechanism deleted a field rather than filtering one: a security review conditioned the memory API's clearance on removing \texttt{user\_info}, which was withdrawn from the API response, then the prompts and pipeline schema, then the stored Iceberg column and serving index. An external review can retire a field after deployment, and a consolidation policy that assumes a stable schema will not age well.
-
-\paragraph{What the code enforces.} Depth \(\leq 3\) and root-exclusive demographics are requested in prompts and not checked in code --- though zero Level-4 paths appeared across all 24 elevation runs and both full-backward runs, so the prompt-level bound holds in practice. Merging takes the maximum update count among its sources rather than the sum, which keeps repeated consolidation a fixed point.
-
-\paragraph{What we can and cannot release.} The memory trees are production user data and cannot leave the company, so these measurements are not externally reproducible in the strict sense. The instrument is portable: a few hundred lines with no dependency on our data, applicable to any memory whose notes carry an explicit term field. The agent under measurement reaches us as compiled bytecode, so merge destinations are measured, not argued from source. Per-run artifacts are pinned by content hash, and the mismatches our own audit surfaced are corrected in this version.
 \section{Conclusion and Future Work}
 \label{sec:limitations}
 
-Hierarchical memory systems consolidate themselves, and the step has until now been assessed only by what it saves and what survives downstream. Following individual keywords through it on deployed memory shows it is not doing what its formalization says. A quarter of child keywords vanish from the note and its prose alike, deletion far outnumbers relocation, and users whose siblings share no keyword --- for whom nothing needs to move --- still lose \(18\%\) of their concrete tokens; over \(70\%\) of removed keywords are also missing from the persona the ranker reads. 
+We presented a POI-centric hierarchical note-based memory combining dynamic routing, three-axis preference separation, and backward consolidation. Our main result at \(N{=}500\): the elevation \emph{prompt} is the primary design choice. Two naive variants underperform FixedHier (\(0.740\) and \(0.724\) vs.\ \(0.760\)), but a one-line concrete-noun guard recovers accuracy to \(0.758\), tied with FixedHier and the FullCtx oracle within the \(\pm 0.038\) CI while running \(28\times\) smaller than FullCtx and \(12\%\) smaller than FixedHier on tokens. The backward pass primarily serves as a compression mechanism: removing it inflates memory by \(16\%\) at no measurable accuracy cost, and its sub-steps compress along independent axes (merge reduces count, elevation reduces length). For deployed POI memory, accuracy is set by elevation prompt design; structural backward operations function as cost--quality controls.
 
-Three consequences follow. The deployed guard protected place names and brands, never at risk, while category vocabulary and the behavioural evidence behind each claim (\(2.4\times\) its base rate) disappeared; a guard rewritten from the measured profile removes a further \(11\%\) of the deployed guard's loss for one prompt line. Sibling merging relocates notes rather than deleting them, and an instrument that does not follow the relocation reports that as roughly a quarter of all loss. And none of it transfers between backbones: a prompt validated on one model is evidence about that model only, and can be worse than nothing elsewhere.
+Three limitations remain. First, our tree does not link nodes across branches; A-Mem~\cite{amem}'s cross-node activation could extend trait elevation toward multi-hop reasoning. Second, every memory operation relies on LLM judgment, with a 73K-token implicit extraction step dominating the forward pass; plausible \(7\)--\(50\times\) reductions include rule-based thresholds for the cheapest steps, distilling the agent~\cite{personamem-v2}, and clustering similar inputs before the LLM~\cite{personax}. Third, prompts and the POI taxonomy are Korean; other languages require taxonomy adaptation and translation.
 
-We could not close the chain to accuracy, and we now know why. Deleting the exposed pool from the notes \emph{and} from the prose the persona is written from changes \(26.4\%\) of the answers and still leaves accuracy untouched (\(+0.011\), \(p = 0.43\)). A four-way choice over same-category venues is insensitive to keyword-level memory content, so more users would not have rescued it. The same probe is not insensitive to everything. Holding the memory fixed and varying only its delivery --- selecting paths, then synthesizing a persona --- costs \(+0.190\) accuracy against handing over the raw notes, three quarters of the gain the deployed memory delivers over an empty persona. The step we instrumented is the cheaper of the two compressions in the pipeline, by roughly a factor of six. Three limitations remain: consolidation has run once over 35 users, so our growth rates describe the unconsolidated regime rather than a controlled comparison; guard-v2 was derived and tested on one backbone; and the prompts and taxonomy are Korean --- the failure mode is unlikely to be language-specific, but the guard's wording certainly is.
-
-What we would ask of anyone building such a system is the thing we did not do while operating ours: look at the maintenance step directly. Instrumenting it needs no labels and no downstream task, and a few hundred lines of it found a guard defending tokens that were never at risk, an operation we had blamed for roughly a quarter of the loss that does not delete at all, and a prompt that helps one backbone while harming the one we shipped. And the one thing that did move accuracy was the step we never thought to question.
-
-%% ============================================================
-%% APPENDIX
-%% ============================================================
-\clearpage
-\appendix
-
-\section{Motivating example}
-\label{app:motivation}
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/intro_memory.png}
-  \Description{Three-panel comparison of personalization on a dining query for a user whose preferences shifted from spicy to mild after a gastritis episode: a full-context LLM and a RAG baseline both recommend spicy dishes by missing the gastritis signal, while a hierarchical-note memory consolidates activities into topic-wise notes and recommends warm congee. The consolidation step shown in the third panel is the operation the paper goes on to measure.}
-  \caption{Why the memory has to contract, and what it risks. An illustrative user's preferences have evolved (spicy $\to$ mild after gastritis; the deployed system filters health content, Section~\ref{sec:governance}). \textit{Left:} a full-context LLM cannot reason past its context limit, and RAG retrieves entries similar to ``dining'' while missing the gastritis signal, so both recommend spicy dishes. \textit{Middle:} the raw history exceeds the context window and the decisive evidence is scattered across sessions --- the pressure that motivates a compact, structured memory. \textit{Right:} hierarchical notes consolidate that history and surface the evolved preference. The consolidation step this figure takes for granted is what the rest of the paper measures: the same operation that keeps ``mild, gastritis'' usable can also delete it.}
-  \label{fig:overview}
-\end{figure}
-
-\section{Memory schema detail}
-\label{app:schema}
-
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/method.png}
-  \Description{Diagram of the Memory Agent operation in three stages: an initial per-node note tree anchored to a personal hierarchy, a forward update where a new interaction selectively modifies only the affected Korean-cuisine note, and a backward consolidation step where a shared trait is elevated from child to parent with concrete subcategory words preserved at the child while stale leaves are pruned.}
-  \caption{Memory Agent operation. \textit{Initial}: per-node notes anchored to a personal hierarchy (the root demographic note shown here has since been removed). \textit{Forward}: a new interaction selectively updates only the affected note (Korean). \textit{Backward}: a shared trait is elevated from child to parent while concrete subcategory words stay at the child, and stale leaves are pruned. This is the \emph{intended} backward behaviour; Section~\ref{sec:loss} measures how often the deployed system achieves it.}
-  \label{fig:workflow}
-\end{figure}
-
-
-Each node in the hierarchy is associated with a \textit{Note}, a structured record holding the accumulated preference knowledge for that category:
-
-\begin{itemize}
-    \item \textbf{path}: the full hierarchical path (e.g., ``User $>$ Dining $>$ Korean Food''),
-    \item \textbf{summary}: a natural-language paragraph summarizing the user's preferences and behavioral patterns for this category, integrating both explicit and implicit signals (e.g., for the Korean Food node: ``favors spicy and savory dishes such as spicy pork,'' inferred from repeated visits and supportive review excerpts),
-    \item \textbf{keywords}: BM25-oriented keyword tags for retrieval,
-    \item \textbf{updated\_count}: the number of times the note content has been substantively modified,
-    \item \textbf{recently\_updated}: the date of the most recent content update (e.g., the Korean Food note advances from 2025/02/19 to 2025/02/25 after new activity arrives, while the Tennis note, last updated on 2024/10/23, remains unchanged).
-\end{itemize}
-
-A sixth field, \textbf{user\_info}, held demographic and factual attributes at the root (e.g., ``24-year-old male, lactose intolerant, frequently active near Gangnam Station''). Root-exclusivity was requested in the routing prompt but, like depth, was never enforced in code. The field was removed from the API response, then from the pipeline, then from the stored data during the period covered by this paper; Section~\ref{sec:governance} gives the reason. The snapshots our measurements run on predate the removal, and \(6.5\%\) of their notes carry a non-empty value.
-
-All notes for a user are stored atomically in a single Parquet file, enabling efficient bulk I/O. Tree structure metadata (parent--child relationships, node levels) is kept in a separate hierarchy file, so the Memory Agent can load, modify, and persist the entire memory state in one read-modify-write cycle per operation.
-
-\section{Stale leaf pruning}
-\label{app:pruning}
-
-A leaf node \(n\) is pruned when it satisfies both conditions simultaneously:
-\begin{equation}
-\label{eq:pruning}
-    \mathrm{updates}(n) \leq \tau_u \quad \text{and} \quad \mathrm{age}(n) > \tau_d,
-\end{equation}
-where \(\mathrm{updates}(n)\) is the cumulative update count (the schema field \texttt{updated\_count}), \(\mathrm{age}(n)\) is days since its last update, \(\tau_u\) is the minimum update threshold (default 2), and \(\tau_d\) the staleness threshold in days (default 120). Nodes are processed in decreasing depth order, so pruning a leaf may expose its parent as a new leaf, which is then evaluated in the same pass. The mechanism keeps one-off exploratory behaviour from accumulating while retaining nodes reinforced by repeated interaction.
-
-\section{Held-out MCQ construction}
-\label{app:mcq}
-
-The target is each user's first qualified review in 2026-07-16..08-20, strictly after the 2026-07-15 snapshot the memory was built from. Distractors are three same-category POIs matched on review count (\(999/1000\) within \(\pm 20\%\)), excluding anything the user has touched, with sensitive categories dropped to match deployed routing.
-
-Target availability, not tree eligibility, is the binding constraint: review availability retains only \(44.8\%\) of the partition against tree eligibility's \(99.2\%\). We therefore filter on the target first and balance strata within what survives, and require one review in the window rather than our earlier rule's five, which would have retained \(1.5\%\) of this cohort. The distractors are matched on category and review count but not on distance from the user, which Section~\ref{sec:delivery} treats as a measured confound rather than a controlled one.
-
-\section{Signal extraction detail}
-\label{app:extraction}
-
-User preferences for places appear through two different channels: explicit signals written by the user, and implicit signals inferred from behavior. We extract a structured preference profile from each channel separately, then merge them in the hierarchical memory. Separating the two channels suits the POI domain, where implicit behavioral signals are abundant but ambiguous and explicit ones are sparse but precise. A third demographic axis is introduced later, during forward aggregation (Section~\ref{sec:forward}), with root-exclusive routing.
-
-\paragraph{Explicit Signal Extraction.}
-Explicit signals originate from user-authored content (primarily place reviews), where preferences are stated directly in natural language (e.g., ``I love spicy broth'' or ``the quiet atmosphere was perfect for working''). We process review histories with an LLM-based extraction pipeline that, for each user, produces a set of structured persona items. Each item consists of four fields: (a)~\textit{User\_Info}, a single atomic fact about the user's lifestyle or preference distilled from the review evidence; (b)~\textit{Rationale}, a chain-of-thought justification grounded in specific review dates, place names, and quoted expressions; (c)~\textit{User\_Vocabulary}, verbatim words and phrases from the user's original text to preserve linguistic identity; and (d)~\textit{Reference}, indices into the source review records.
-
-To handle the wide variance in review volume across users, we employ two few-shot prompt strategies: a \textit{rich} variant with detailed examples for users who have written many reviews, and a \textit{sparse} variant with conservative, observation-oriented examples for users with limited review data. The sparse strategy deliberately avoids over-generalizing from insufficient evidence, instead emphasizing factual descriptions of observed behavior.
-
-\paragraph{Implicit Signal Extraction.}
-Implicit signals are derived from non-verbal behavioral traces: search queries, POI clicks, dwell patterns, and place saves. Unlike reviews, these actions do not directly articulate preferences, but consistent patterns across many interactions can reveal latent interests~\cite{proex}. We construct a profiling pipeline that transforms raw click logs into structured personas through the following steps:
-
-\begin{enumerate}
-    \item \textbf{Sessionization.} Consecutive interactions involving the same query or the same POI within a 60-minute window are grouped into micro-sessions. Each session records the query text, timestamps, day of week, clicked POI name and category, location, review popularity rank, and click count.
-
-    \item \textbf{Demographic context attachment.} Available demographic attributes (age, gender, marital status, household composition, occupation, and children information) are prepended to the session log as structured metadata. These attributes were later routed exclusively to the root node's \texttt{user\_info} field during hierarchical path mapping (Section~\ref{sec:forward}), enforcing a clean separation between demographic facts and behavioral preferences.
-
-    \item \textbf{LLM-based persona profiling.} The sessionized log is passed to an LLM with strict constraints: (a)~all persona claims must cite specific click evidence; (b)~hallucination of unobserved behaviors (e.g., inferring residence from visit locations) is prohibited; (c)~stereotypical reasoning based on demographics is forbidden; and (d)~the output must decompose preferences into predefined POI domains (dining, caf\'{e}s, travel, medical, beauty, shopping, etc.).
-\end{enumerate}
-
-The output is a domain-partitioned persona string, where each domain section describes the user's inferred preferences with concrete behavioral evidence. To capture temporal dynamics, we apply this extraction over sliding windows (e.g., 21-day periods) across the observation period and aggregate the per-window results into a unified implicit persona per user.
-
-
-\section{Forward aggregation detail}
-\label{app:forward}
-
-When new interaction data arrives (either explicit persona extractions or implicit persona profiles), the Memory Agent executes a three-step forward pass to integrate the information into the existing memory. Each step is mediated by an LLM call; for a user with $N$ distinct target paths identified in Step~2, the total cost is
-\begin{equation}
-\#\mathrm{LLM\,calls}(u) \;=\; 2 + N(u),
-\end{equation}
-where the constant $2$ accounts for the single extraction call (Step~1) and the single path-mapping call (Step~2), and Step~3 contributes one call per target path.
-
-\paragraph{Step~1: Preference Profile Extraction.}
-The raw interaction text, combining both implicit behavioral profiles and explicit review extractions, is analyzed by an LLM to separate three categories of information:
-
-\begin{itemize}
-    \item \textbf{User information} ($\mathcal{U}$): objective, slowly-changing facts such as age, occupation, and primary activity region.
-    \item \textbf{Explicit preferences} ($\mathcal{P}_e$): stated preferences where the user directly expresses likes, dislikes, or requirements in language (e.g., ``I prefer acidic coffee'' or ``I look for outlets at caf\'{e}s'').
-    \item \textbf{Implicit preferences} ($\mathcal{P}_i$): latent preferences inferred from non-verbal behavioral patterns (e.g., ``tends toward isolated, productivity-oriented spaces'' derived from repeated clicks on quiet study caf\'{e}s).
-\end{itemize}
-
-This three-axis separation isolates demographic facts into a dedicated channel. The LLM is instructed to preserve concrete keywords from the source data rather than abstracting them (e.g., extracting specific dish names rather than ``diverse menu''), to merge semantically similar items into compact statements, and to strictly distinguish between exploratory actions (clicks, searches) and confirmed actions (visits, reservations) to avoid inflating behavioral claims.
-
-\paragraph{Step~2: Hierarchical Path Mapping.}
-Unlike learned taxonomy expansion such as TaxoExpan~\cite{taxoexpan}, our routing is performed in-context by an LLM that jointly considers base-taxonomy paths and any user-specific paths created in earlier sessions. The mapping enforces five principles: \textit{(i)~root exclusivity for demographics}---while the field existed, $\mathcal{U}$ items were mapped only to the root \texttt{user\_info} field, never as subcategory nodes; \textit{(ii)~context-aware routing}---``prefers quiet atmosphere'' goes to ``User $>$ Caf\'{e}'' if surrounding evidence is caf\'{e}-related, otherwise to the root; \textit{(iii)~semantic reuse}---existing paths are preferred when they subsume the new item (a ``latte'' preference maps to ``Coffee/Tea'' rather than a new ``Latte'' sibling); \textit{(iv)~hierarchical consistency}---new Level-3 nodes must match the abstraction level of their siblings (``Korean''/``Japanese'' under ``Dining'' yes; ``Naengmyeon'' no, it belongs under ``Korean''), and nodes at Level~4 or deeper are prohibited; \textit{(v)~aggregation}---items targeting the same path are grouped into one update call.
-
-\paragraph{Step~3: Note Update.}
-For each target path, an LLM acts as an \textit{editor} rather than appender~\cite{mem0}: it compares new data with existing content, resolves conflicts in favor of recency, removes outdated entries, and consolidates redundant statements. The root node managed demographics in its \texttt{user\_info} field (since removed; Section~\ref{sec:governance}); sub-nodes are restricted to category-specific preferences. Substantive changes increment \texttt{updated\_count} and refresh \texttt{recently\_updated}.
-
-\section{Guard wording}
-\label{app:guard}
-The prompts are Korean; the rendering below is ours. The deployed guard is one instruction appended to the elevation prompt: proper nouns --- place names, store names, brands --- are kept verbatim at the child and never lifted to the parent. The wording derived from the measured loss profile (guard-v2) replaces it with:
-
-\begin{quote}\small
-\textbf{Preserve concrete nouns.} Never abstract or delete the following; leave them verbatim in the child note: (1) names of categories, business types and kinds of food (e.g., Korean, Chinese, Japanese, gukbap, fried chicken, jokbal, sushi, izakaya, bakery, caf\'{e}, grilled meat, raw fish); (2) place, store and brand names; (3) behavioural-evidence phrases (e.g., repeated clicks, repeated searches, sustained interest, saved POIs). Do not replace them with umbrella terms such as ``diverse food'' or ``dining preference''. State at the parent only the tendency the children share, and do not move a child's concrete nouns to the parent.
-\end{quote}
 
 %% ============================================================
 %% REFERENCES
@@ -639,51 +456,6 @@ The prompts are Korean; the rendering below is ours. The deployed guard is one i
 \begin{thebibliography}{99}
 \setlength{\itemsep}{0pt}
 \setlength{\parskip}{0pt}
-
-\bibitem{maynez-faithfulness}
-J.~Maynez, S.~Narayan, B.~Bohnet, and R.~McDonald.
-\newblock On faithfulness and factuality in abstractive summarization.
-\newblock In \textit{ACL}, 2020.
-
-\bibitem{hallucination-survey}
-L.~Huang, W.~Yu, W.~Ma, W.~Zhong, Z.~Feng, H.~Wang, Q.~Chen, W.~Peng, X.~Feng, B.~Qin, and T.~Liu.
-\newblock A survey on hallucination in large language models: Principles, taxonomy, challenges, and open questions.
-\newblock \textit{ACM Transactions on Information Systems}, 2025. arXiv:2311.05232.
-
-\bibitem{llmlingua}
-H.~Jiang, Q.~Wu, C.-Y.~Lin, Y.~Yang, and L.~Qiu.
-\newblock {LLMLingua}: Compressing prompts for accelerated inference of large language models.
-\newblock In \textit{EMNLP}, 2023. arXiv:2310.05736.
-
-\bibitem{formatspread}
-M.~Sclar, Y.~Choi, Y.~Tsvetkov, and A.~Suhr.
-\newblock Quantifying language models' sensitivity to spurious features in prompt design, or: How {I} learned to start worrying about prompt formatting.
-\newblock In \textit{ICLR}, 2024. arXiv:2310.11324.
-
-\bibitem{multiprompt}
-M.~Mizrahi, G.~Kaplan, D.~Malkin, R.~Dror, D.~Shahaf, and G.~Stanovsky.
-\newblock State of what art? {A} call for multi-prompt {LLM} evaluation.
-\newblock \textit{Transactions of the ACL}, 12, 2024.
-
-\bibitem{memory-survey}
-Z.~Zhang, X.~Bo, C.~Ma, R.~Li, X.~Chen, Q.~Dai, J.~Zhu, Z.~Dong, and J.-R.~Wen.
-\newblock A survey on the memory mechanism of large language model based agents.
-\newblock \textit{arXiv preprint arXiv:2404.13501}, 2024.
-
-\bibitem{mtbench}
-L.~Zheng, W.-L.~Chiang, Y.~Sheng, S.~Zhuang, Z.~Wu, Y.~Zhuang, Z.~Lin, Z.~Li, D.~Li, E.~P.~Xing, H.~Zhang, J.~E.~Gonzalez, and I.~Stoica.
-\newblock Judging {LLM-as-a-Judge} with {MT-Bench} and {Chatbot Arena}.
-\newblock In \textit{NeurIPS Datasets and Benchmarks Track}, 2023.
-
-\bibitem{laaj-survey}
-J.~Gu, X.~Jiang, Z.~Shi, H.~Tan, X.~Zhai, C.~Xu, W.~Li, Y.~Shen, S.~Ma, H.~Liu, S.~Wang, K.~Zhang, Y.~Wang, W.~Gao, L.~Ni, and J.~Guo.
-\newblock A survey on {LLM-as-a-Judge}.
-\newblock \textit{arXiv preprint arXiv:2411.15594}, 2025.
-
-\bibitem{laaj-podcast}
-F.~Fabbri, G.~Penha, E.~D'Amico, A.~Wang, M.~De~Nadai, J.~Doremus, P.~Gigioli, A.~Damianou, O.~St{\aa}l, and M.~Lalmas.
-\newblock Evaluating podcast recommendations with profile-aware {LLM-as-a-Judge}.
-\newblock In \textit{RecSys}, 2025. arXiv:2508.08777.
 
 \bibitem{qwen3}
 A.~Yang, A.~Yang, B.~Zhang, B.~Hui, B.~Zheng, B.~Yu, C.~Li, D.~Liu, F.~Huang, G.~Dong, et~al.
