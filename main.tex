@@ -127,7 +127,7 @@ At this accuracy, the system is also the most compact memory among the deployabl
 %% ============================================================
 \section{Introduction}
 
-\emph{Relevance to the Web.} Place search and recommendation on web map services run on exactly this kind of user model; this paper studies how an LLM-maintained memory for it should be consolidated, and reports what holds up in a deployed setting.
+\emph{Relevance to the Web.} Place search and recommendation on web map services run on exactly this kind of user model; this paper studies how an LLM-maintained hierarchical memory for it should be consolidated, and which prompt-level design choices matter.
 
 Personalization drives user satisfaction and click-through rate (CTR) in modern platform services. In POI (Point-of-Interest)-centric services such as place recommendation, accurate modeling of users' preferred place types and visitation patterns is critical. Prior work constructs user personas either by injecting the full interaction history into a large language model (LLM)~\cite{beyond-context-window} or by chunking and retrieving relevant pieces via similarity~\cite{dpr,contriever}; the resulting personas serve as context in recommendation and search, and their quality directly affects downstream performance.
 
